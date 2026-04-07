@@ -1,20 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QuickFit</title>
     <meta
       name="description"
       content="QuickFit helps you build weather-aware outfits from your closet in seconds."
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap"
       rel="stylesheet"
-    />
-    <link rel="stylesheet" href="./styles.css" />
+    >
+    <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
     <div class="page-shell">
@@ -25,7 +25,7 @@
               class="brand-lockup__logo"
               src="./QuickFit_Logo.png"
               alt="QuickFit logo"
-            />
+            >
             <div>
               <p class="eyebrow">Weather-aware styling assistant</p>
               <h1>QuickFit makes getting dressed feel effortless.</h1>
@@ -36,10 +36,18 @@
             </div>
           </div>
           <div class="hero__actions">
-            <button class="button button--primary" data-nav-target="planner">
+            <button
+              class="button button--primary"
+              type="button"
+              data-nav-target="planner"
+            >
               Plan My Outfit
             </button>
-            <button class="button button--ghost" data-nav-target="closet">
+            <button
+              class="button button--ghost"
+              type="button"
+              data-nav-target="closet"
+            >
               Manage Closet
             </button>
           </div>
@@ -61,13 +69,17 @@
       </header>
 
       <nav class="section-nav" aria-label="Primary">
-        <button class="section-nav__link is-active" data-section="planner">
+        <button
+          class="section-nav__link is-active"
+          type="button"
+          data-section="planner"
+        >
           Outfit Planner
         </button>
-        <button class="section-nav__link" data-section="closet">
+        <button class="section-nav__link" type="button" data-section="closet">
           Closet Manager
         </button>
-        <button class="section-nav__link" data-section="profile">
+        <button class="section-nav__link" type="button" data-section="profile">
           Profile
         </button>
       </nav>
@@ -83,7 +95,7 @@
             <form id="planner-form" class="control-form">
               <label>
                 Temperature
-                <div class="range-row">
+                <span class="range-row">
                   <input
                     id="temperature"
                     name="temperature"
@@ -91,9 +103,9 @@
                     min="20"
                     max="100"
                     value="68"
-                  />
+                  >
                   <span id="temperature-value">68°F</span>
-                </div>
+                </span>
               </label>
 
               <label>
@@ -165,7 +177,7 @@
                   <p id="bottom-recommendation">Save pants, skirts, or shorts in your closet.</p>
                 </div>
                 <div>
-                  <span class="recommendation-label">Layer & extras</span>
+                  <span class="recommendation-label">Layer and extras</span>
                   <p id="layer-recommendation">Outer layers and accessories will show up here.</p>
                 </div>
               </div>
@@ -196,17 +208,17 @@
                   name="name"
                   placeholder="Olive cotton button-up"
                   required
-                />
+                >
               </label>
 
               <div class="form-row">
                 <label>
                   Color
-                  <input type="text" name="color" placeholder="Olive" required />
+                  <input type="text" name="color" placeholder="Olive" required>
                 </label>
                 <label>
                   Material
-                  <input type="text" name="material" placeholder="Cotton" required />
+                  <input type="text" name="material" placeholder="Cotton" required>
                 </label>
               </div>
 
