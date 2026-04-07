@@ -1,7 +1,10 @@
 <div align="center">
-	<h1>👗 QuickFit</h1>
+    <h1></h1>
+	<img src="QuickFit_Logo.png" alt="QuickFit logo" width="130" />
 	<p><em>Smart outfit planning for real life mornings</em></p>
 </div>
+
+---
 
 QuickFit is a web app that recommends outfits using weather conditions, seasonal context, and each user's closet.
 
