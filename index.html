@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuickFit</title>
+    <meta
+      name="description"
+      content="QuickFit helps you build weather-aware outfits from your closet in seconds."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero__content">
+          <div class="brand-lockup">
+            <img
+              class="brand-lockup__logo"
+              src="./QuickFit_Logo.png"
+              alt="QuickFit logo"
+            />
+            <div>
+              <p class="eyebrow">Weather-aware styling assistant</p>
+              <h1>QuickFit makes getting dressed feel effortless.</h1>
+              <p class="hero-copy">
+                Build your digital closet, tell QuickFit today’s vibe, and get
+                a fast outfit suggestion tuned to temperature, season, and style.
+              </p>
+            </div>
+          </div>
+          <div class="hero__actions">
+            <button class="button button--primary" data-nav-target="planner">
+              Plan My Outfit
+            </button>
+            <button class="button button--ghost" data-nav-target="closet">
+              Manage Closet
+            </button>
+          </div>
+          <div class="hero__metrics">
+            <article>
+              <strong>Fast mornings</strong>
+              <span>Skip the weather check spiral.</span>
+            </article>
+            <article>
+              <strong>Closet clarity</strong>
+              <span>Organize pieces by style, material, and theme.</span>
+            </article>
+            <article>
+              <strong>Smarter outfit picks</strong>
+              <span>Mix function with the vibe you want for the day.</span>
+            </article>
+          </div>
+        </div>
+      </header>
+
+      <nav class="section-nav" aria-label="Primary">
+        <button class="section-nav__link is-active" data-section="planner">
+          Outfit Planner
+        </button>
+        <button class="section-nav__link" data-section="closet">
+          Closet Manager
+        </button>
+        <button class="section-nav__link" data-section="profile">
+          Profile
+        </button>
+      </nav>
+
+      <main class="main-content">
+        <section class="panel-grid panel-grid--planner is-active" id="planner">
+          <article class="panel panel--controls">
+            <div class="panel__header">
+              <p class="eyebrow">Main page</p>
+              <h2>Set today’s conditions</h2>
+            </div>
+
+            <form id="planner-form" class="control-form">
+              <label>
+                Temperature
+                <div class="range-row">
+                  <input
+                    id="temperature"
+                    name="temperature"
+                    type="range"
+                    min="20"
+                    max="100"
+                    value="68"
+                  />
+                  <span id="temperature-value">68°F</span>
+                </div>
+              </label>
+
+              <label>
+                Weather
+                <select name="weather" id="weather">
+                  <option value="sunny">Sunny</option>
+                  <option value="cloudy">Cloudy</option>
+                  <option value="rainy">Rainy</option>
+                  <option value="windy">Windy</option>
+                  <option value="snowy">Snowy</option>
+                </select>
+              </label>
+
+              <label>
+                Season
+                <select name="season" id="season"></select>
+              </label>
+
+              <label>
+                Theme for the day
+                <select name="theme" id="theme">
+                  <option value="Casual">Casual</option>
+                  <option value="Formal">Formal</option>
+                  <option value="Semi-formal">Semi-formal</option>
+                  <option value="Professional">Professional</option>
+                </select>
+              </label>
+
+              <label>
+                Style energy
+                <select name="stylePreference" id="stylePreference">
+                  <option value="Balanced">Balanced</option>
+                  <option value="Classic">Classic</option>
+                  <option value="Minimal">Minimal</option>
+                  <option value="Bold">Bold</option>
+                  <option value="Soft">Soft</option>
+                </select>
+              </label>
+
+              <button class="button button--primary" type="submit">
+                Generate Recommendation
+              </button>
+            </form>
+          </article>
+
+          <article class="panel panel--recommendation">
+            <div class="panel__header">
+              <p class="eyebrow">Mannequin view</p>
+              <h2>Today’s suggested outfit</h2>
+            </div>
+
+            <div class="mannequin-card">
+              <div class="weather-chip" id="weather-summary"></div>
+              <div class="mannequin" aria-hidden="true">
+                <div class="mannequin__head"></div>
+                <div class="mannequin__torso" id="mannequin-top"></div>
+                <div class="mannequin__legs" id="mannequin-bottom"></div>
+                <div class="mannequin__extra" id="mannequin-layer"></div>
+                <div class="mannequin__base"></div>
+              </div>
+
+              <div class="recommendation-list">
+                <div>
+                  <span class="recommendation-label">Top</span>
+                  <p id="top-recommendation">Add shirts or dresses to get started.</p>
+                </div>
+                <div>
+                  <span class="recommendation-label">Bottom</span>
+                  <p id="bottom-recommendation">Save pants, skirts, or shorts in your closet.</p>
+                </div>
+                <div>
+                  <span class="recommendation-label">Layer & extras</span>
+                  <p id="layer-recommendation">Outer layers and accessories will show up here.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="insight-card">
+              <h3>Why this fit works</h3>
+              <p id="recommendation-rationale">
+                QuickFit will explain how the weather and your style tags shaped
+                the outfit once your closet has a few pieces.
+              </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel-grid panel-grid--closet" id="closet">
+          <article class="panel">
+            <div class="panel__header">
+              <p class="eyebrow">Closet manager</p>
+              <h2>Add clothing items</h2>
+            </div>
+
+            <form id="closet-form" class="closet-form">
+              <label>
+                Item name
+                <input
+                  type="text"
+                  name="name"
+                  placeholder="Olive cotton button-up"
+                  required
+                />
+              </label>
+
+              <div class="form-row">
+                <label>
+                  Color
+                  <input type="text" name="color" placeholder="Olive" required />
+                </label>
+                <label>
+                  Material
+                  <input type="text" name="material" placeholder="Cotton" required />
+                </label>
+              </div>
+
+              <div class="form-row">
+                <label>
+                  Type
+                  <select name="type" id="type" required></select>
+                </label>
+                <label>
+                  Style
+                  <select name="style" id="style" required></select>
+                </label>
+              </div>
+
+              <div class="form-row">
+                <label>
+                  Theme
+                  <select name="theme" required>
+                    <option value="Casual">Casual</option>
+                    <option value="Formal">Formal</option>
+                    <option value="Semi-formal">Semi-formal</option>
+                    <option value="Professional">Professional</option>
+                  </select>
+                </label>
+                <label>
+                  Warmth
+                  <select name="warmth" required>
+                    <option value="light">Light</option>
+                    <option value="medium">Medium</option>
+                    <option value="heavy">Heavy</option>
+                  </select>
+                </label>
+              </div>
+
+              <button class="button button--primary" type="submit">
+                Save to Closet
+              </button>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel__header">
+              <p class="eyebrow">Your wardrobe</p>
+              <h2>Closet inventory</h2>
+            </div>
+
+            <div class="closet-toolbar">
+              <label>
+                Filter by type
+                <select id="closet-filter">
+                  <option value="all">All items</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="closet-list" class="closet-list"></div>
+          </article>
+        </section>
+
+        <section class="panel-grid panel-grid--profile" id="profile">
+          <article class="panel">
+            <div class="panel__header">
+              <p class="eyebrow">Optional personalization</p>
+              <h2>User profile</h2>
+            </div>
+
+            <form id="profile-form" class="closet-form">
+              <div class="form-row">
+                <label>
+                  Temperature preference
+                  <select name="temperatureBias">
+                    <option value="neutral">Balanced</option>
+                    <option value="runs_cold">I run cold</option>
+                    <option value="runs_hot">I run hot</option>
+                  </select>
+                </label>
+                <label>
+                  Preferred style direction
+                  <select name="profileStyle">
+                    <option value="Balanced">Balanced</option>
+                    <option value="Classic">Classic</option>
+                    <option value="Minimal">Minimal</option>
+                    <option value="Bold">Bold</option>
+                    <option value="Soft">Soft</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                Presentation preference
+                <select name="presentation">
+                  <option value="Unspecified">Unspecified</option>
+                  <option value="Feminine">Feminine</option>
+                  <option value="Masculine">Masculine</option>
+                  <option value="Androgynous">Androgynous</option>
+                </select>
+              </label>
+
+              <button class="button button--primary" type="submit">
+                Save Profile
+              </button>
+            </form>
+          </article>
+
+          <article class="panel panel--profile-summary">
+            <div class="panel__header">
+              <p class="eyebrow">What QuickFit knows</p>
+              <h2>Profile summary</h2>
+            </div>
+            <div id="profile-summary" class="profile-summary"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>
