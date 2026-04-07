@@ -379,6 +379,14 @@ select:focus {
   gap: 16px;
 }
 
+.form-row--conditional {
+  min-height: 0;
+}
+
+.conditional-field.is-hidden {
+  display: none;
+}
+
 .closet-toolbar {
   grid-template-columns: minmax(180px, 260px);
   margin-bottom: 18px;
@@ -413,6 +421,12 @@ select:focus {
 .closet-card__meta {
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 10px;
+}
+
+.empty-state {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(237, 246, 234, 0.6);
 }
 
 .tag {

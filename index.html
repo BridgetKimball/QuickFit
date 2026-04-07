@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap"
       rel="stylesheet"
     >
-    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="src/styles/styles.css">
   </head>
   <body>
     <div class="page-shell">
@@ -23,7 +23,7 @@
           <div class="brand-lockup">
             <img
               class="brand-lockup__logo"
-              src="./QuickFit_Logo.png"
+              src="./images/QuickFit_Logo.png"
               alt="QuickFit logo"
             >
             <div>
@@ -128,6 +128,7 @@
                 Theme for the day
                 <select name="theme" id="theme">
                   <option value="Casual">Casual</option>
+                  <option value="Business-Casual">Business-Casual</option>
                   <option value="Formal">Formal</option>
                   <option value="Semi-formal">Semi-formal</option>
                   <option value="Professional">Professional</option>
@@ -214,11 +215,11 @@
               <div class="form-row">
                 <label>
                   Color
-                  <input type="text" name="color" placeholder="Olive" required>
+                  <select name="color" id="color" required></select>
                 </label>
                 <label>
                   Material
-                  <input type="text" name="material" placeholder="Cotton" required>
+                  <input type="text" name="material" placeholder="Optional">
                 </label>
               </div>
 
@@ -233,11 +234,34 @@
                 </label>
               </div>
 
+              <div class="form-row form-row--conditional">
+                <label id="custom-color-field" class="conditional-field is-hidden">
+                  Custom color
+                  <input
+                    type="text"
+                    name="customColor"
+                    id="customColor"
+                    placeholder="Describe the color"
+                  >
+                </label>
+                <label id="jewelry-field" class="conditional-field is-hidden">
+                  Jewelry type
+                  <select name="jewelryType" id="jewelryType">
+                    <option value="">Select jewelry type</option>
+                    <option value="Necklace">Necklace</option>
+                    <option value="Earrings">Earrings</option>
+                    <option value="Bracelets">Bracelets</option>
+                    <option value="Rings">Rings</option>
+                  </select>
+                </label>
+              </div>
+
               <div class="form-row">
                 <label>
                   Theme
                   <select name="theme" required>
                     <option value="Casual">Casual</option>
+                    <option value="Business-Casual">Business-Casual</option>
                     <option value="Formal">Formal</option>
                     <option value="Semi-formal">Semi-formal</option>
                     <option value="Professional">Professional</option>
@@ -334,6 +358,6 @@
       </main>
     </div>
 
-    <script type="module" src="./script.js"></script>
+    <script type="module" src="./src/scripts/script.js"></script>
   </body>
 </html>

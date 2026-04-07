@@ -4,19 +4,130 @@ const STORAGE_KEYS = {
 };
 
 const clothingStyles = {
-  Dress: ["Floral", "Floor-length", "Wrap", "Slip"],
-  Shirt: ["Blouse", "T-shirt", "Button-up", "Knit top"],
-  Skirt: ["Flowy", "Dance", "A-line", "Midi"],
-  Shorts: ["Mini", "Knee-length", "Tailored", "Relaxed"],
-  Pants: ["Flare", "Straight", "Skinny", "Wide-leg"],
-  "Outer Layer": ["Jacket", "Coat", "Vest", "Cardigan"],
-  Accessories: ["Hat", "Sunglasses", "Ring", "Necklace", "Bracelet", "Earrings"],
+  Jackets: [
+    "Leather jacket",
+    "Denim jacket",
+    "Bomber jacket",
+    "Motorcycle jacket",
+    "Vest",
+    "Blazer",
+    "Fleece jacket",
+    "Shirt jacket",
+    "Chore jacket",
+    "Varsity jacket",
+    "Windbreaker",
+    "Puffer jacket",
+    "Parka",
+    "Peacoat",
+    "Tuxedo jacket",
+    "Quilted jacket",
+    "Overcoat",
+    "Trench coat",
+  ],
+  Pants: [
+    "Hot pants",
+    "Straight",
+    "Skinny",
+    "Boot-cut",
+    "Flare",
+    "Wide leg",
+    "Pegged",
+    "Harem",
+    "Carpenter / overall",
+    "Sweat pants",
+    "Stirrup",
+    "5-pocket jeans",
+    "Bush pants",
+    "Cargo pants",
+    "Sailor pants",
+    "Jodhpurs",
+    "Palazzo",
+    "Jumpsuit",
+  ],
+  Shirts: [
+    "Tube top",
+    "Sports bra",
+    "Tank top",
+    "Sleeveless shirt",
+    "V-neck shirt",
+    "T-shirt",
+    "Blouse",
+    "Shirt",
+    "Western shirt",
+    "Smock",
+    "Peplum",
+    "Gypsy",
+    "Tunic",
+    "Polo",
+    "Turtleneck",
+  ],
+  Shorts: [
+    "Denim",
+    "Boyfriend",
+    "Cargo",
+    "Skort",
+    "Bloomer",
+    "Pleat",
+    "Culottes",
+    "Boxer",
+    "Bermuda",
+    "Knee",
+    "Bike",
+    "Pedal",
+    "Gym",
+  ],
+  Skirts: [
+    "Pencil",
+    "A-Line",
+    "Waist Pleat",
+    "Hip Pleat",
+    "Godet",
+    "Tulip",
+    "Trumpet",
+    "Sarong",
+    "Gypsy",
+    "Tiered",
+    "Gore",
+    "Handkerchief",
+    "Wrap",
+    "Asymmetrical",
+    "Circle",
+  ],
+  Sweaters: [
+    "Crewneck",
+    "V-neck",
+    "Turtleneck",
+    "Quarter-zip",
+    "Cardigan",
+    "Cable knit",
+    "Oversized",
+    "Fair Isle",
+  ],
+  Accessories: ["Hat", "Sunglasses", "Scarf", "Jewelry"],
 };
 
+const colorOptions = [
+  "Pink",
+  "Red",
+  "Orange",
+  "Yellow",
+  "Light Green",
+  "Dark Green",
+  "Light Blue",
+  "Dark Blue",
+  "Light Purple",
+  "Dark Purple",
+  "Brown",
+  "Black",
+  "Grey",
+  "White",
+  "Other",
+];
+
 const typeGroups = {
-  top: ["Dress", "Shirt"],
-  bottom: ["Skirt", "Shorts", "Pants"],
-  layer: ["Outer Layer", "Accessories"],
+  top: ["Shirts", "Sweaters"],
+  bottom: ["Skirts", "Shorts", "Pants"],
+  layer: ["Jackets", "Accessories"],
 };
 
 const seasonOptions = ["Spring", "Summer", "Fall", "Winter"];
@@ -24,31 +135,31 @@ const seasonOptions = ["Spring", "Summer", "Fall", "Winter"];
 const defaultCloset = [
   {
     id: crypto.randomUUID(),
-    name: "Forest knit tee",
-    color: "Deep green",
+    name: "Forest weekend tee",
+    color: "Dark Green",
     material: "Cotton",
-    type: "Shirt",
+    type: "Shirts",
     style: "T-shirt",
     theme: "Casual",
     warmth: "light",
   },
   {
     id: crypto.randomUUID(),
-    name: "Tailored cream trousers",
-    color: "Cream",
-    material: "Linen blend",
+    name: "Cream straight trousers",
+    color: "White",
+    material: "",
     type: "Pants",
     style: "Straight",
-    theme: "Professional",
+    theme: "Business-Casual",
     warmth: "medium",
   },
   {
     id: crypto.randomUUID(),
-    name: "Olive cropped jacket",
-    color: "Olive",
-    material: "Denim",
-    type: "Outer Layer",
-    style: "Jacket",
+    name: "Olive bomber layer",
+    color: "Dark Green",
+    material: "",
+    type: "Jackets",
+    style: "Bomber jacket",
     theme: "Casual",
     warmth: "medium",
   },
@@ -84,6 +195,11 @@ const elements = {
   closetFilter: document.querySelector("#closet-filter"),
   typeSelect: document.querySelector("#type"),
   styleSelect: document.querySelector("#style"),
+  colorSelect: document.querySelector("#color"),
+  customColorField: document.querySelector("#custom-color-field"),
+  customColorInput: document.querySelector("#customColor"),
+  jewelryField: document.querySelector("#jewelry-field"),
+  jewelryTypeSelect: document.querySelector("#jewelryType"),
   profileForm: document.querySelector("#profile-form"),
   profileSummary: document.querySelector("#profile-summary"),
 };
@@ -93,18 +209,14 @@ init();
 function init() {
   populateSeasonOptions();
   populateTypeOptions();
+  populateColorOptions();
   updateStyleOptions(elements.typeSelect.value);
+  syncConditionalFields();
   populateClosetFilter();
   bindEvents();
   renderCloset();
   renderProfile();
-  generateRecommendation({
-    temperature: Number(elements.temperature.value),
-    weather: document.querySelector("#weather").value,
-    season: elements.season.value,
-    theme: document.querySelector("#theme").value,
-    stylePreference: document.querySelector("#stylePreference").value,
-  });
+  generateRecommendation(getPlannerState());
 }
 
 function bindEvents() {
@@ -122,24 +234,22 @@ function bindEvents() {
 
   elements.plannerForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    generateRecommendation({
-      temperature: Number(formData.get("temperature")),
-      weather: formData.get("weather"),
-      season: formData.get("season"),
-      theme: formData.get("theme"),
-      stylePreference: formData.get("stylePreference"),
-    });
+    generateRecommendation(getPlannerState(new FormData(event.currentTarget)));
   });
 
   elements.typeSelect.addEventListener("change", (event) => {
     updateStyleOptions(event.target.value);
+    syncConditionalFields();
   });
+
+  elements.styleSelect.addEventListener("change", syncConditionalFields);
+  elements.colorSelect.addEventListener("change", syncConditionalFields);
 
   elements.closetForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const item = Object.fromEntries(formData.entries());
+    const item = buildClosetItem(formData);
+    if (!item) return;
 
     state.closet.unshift({
       id: crypto.randomUUID(),
@@ -148,7 +258,10 @@ function bindEvents() {
 
     persistCollection(STORAGE_KEYS.closet, state.closet);
     event.currentTarget.reset();
+    elements.typeSelect.selectedIndex = 0;
+    elements.colorSelect.selectedIndex = 0;
     updateStyleOptions(elements.typeSelect.value);
+    syncConditionalFields();
     populateClosetFilter();
     renderCloset();
     generateRecommendation(getPlannerState());
@@ -198,6 +311,16 @@ function populateTypeOptions() {
   });
 }
 
+function populateColorOptions() {
+  colorOptions.forEach((color, index) => {
+    const option = document.createElement("option");
+    option.value = color;
+    option.textContent = color;
+    option.selected = index === 0;
+    elements.colorSelect.append(option);
+  });
+}
+
 function updateStyleOptions(type) {
   elements.styleSelect.innerHTML = "";
   clothingStyles[type].forEach((style, index) => {
@@ -207,6 +330,39 @@ function updateStyleOptions(type) {
     option.selected = index === 0;
     elements.styleSelect.append(option);
   });
+}
+
+function syncConditionalFields() {
+  const showCustomColor = elements.colorSelect.value === "Other";
+  const showJewelrySubtype =
+    elements.typeSelect.value === "Accessories" && elements.styleSelect.value === "Jewelry";
+
+  elements.customColorField.classList.toggle("is-hidden", !showCustomColor);
+  elements.customColorInput.required = showCustomColor;
+  if (!showCustomColor) elements.customColorInput.value = "";
+
+  elements.jewelryField.classList.toggle("is-hidden", !showJewelrySubtype);
+  elements.jewelryTypeSelect.required = showJewelrySubtype;
+  if (!showJewelrySubtype) elements.jewelryTypeSelect.value = "";
+}
+
+function buildClosetItem(formData) {
+  const rawItem = Object.fromEntries(formData.entries());
+  const color = rawItem.color === "Other" ? rawItem.customColor.trim() : rawItem.color;
+
+  if (!color) return null;
+
+  return {
+    name: rawItem.name.trim(),
+    color,
+    baseColor: rawItem.color,
+    material: rawItem.material.trim(),
+    type: rawItem.type,
+    style: rawItem.style,
+    jewelryType: rawItem.jewelryType || "",
+    theme: rawItem.theme,
+    warmth: rawItem.warmth,
+  };
 }
 
 function populateClosetFilter() {
@@ -240,21 +396,24 @@ function renderCloset() {
   elements.closetList.innerHTML = "";
 
   filteredItems.forEach((item) => {
+    const materialLabel = item.material ? item.material : "Material not specified";
+    const detailLine = `${item.color} ${describeStyle(item).toLowerCase()}${item.material ? ` in ${item.material.toLowerCase()}` : ""}`;
     const card = document.createElement("article");
     card.className = "closet-card fade-in";
     card.innerHTML = `
       <div class="closet-card__header">
         <div>
           <div class="closet-card__title">${item.name}</div>
-          <p>${item.color} ${item.material.toLowerCase()} ${item.style.toLowerCase()}</p>
+          <p>${detailLine}</p>
         </div>
         <button class="closet-card__delete" data-delete-id="${item.id}" type="button">Remove</button>
       </div>
       <div class="closet-card__meta">
         <span class="tag">${item.type}</span>
-        <span class="tag">${item.style}</span>
+        <span class="tag">${describeStyle(item)}</span>
         <span class="tag">${item.theme}</span>
         <span class="tag">${capitalize(item.warmth)} warmth</span>
+        <span class="tag">${materialLabel}</span>
       </div>
     `;
 
@@ -295,14 +454,14 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
   elements.weatherSummary.textContent = `${temperature}°F · ${capitalize(weather)} · ${season}`;
   elements.topRecommendation.textContent = topItem
     ? describeItem(topItem)
-    : "Add a shirt or dress so QuickFit can suggest a top.";
+    : "Add shirts or sweaters so QuickFit can suggest a top.";
   elements.bottomRecommendation.textContent = bottomItem
     ? describeItem(bottomItem)
     : "Add pants, shorts, or skirts so QuickFit can finish the outfit.";
   elements.layerRecommendation.textContent = layerItem
     ? describeItem(layerItem)
     : effectiveTemperature < 60 || weather === "rainy"
-      ? "A jacket, coat, or weather-ready accessory would help here."
+      ? "A jacket, scarf, or weather-ready accessory would help here."
       : "No extra layer needed right now, but accessories can elevate the look.";
 
   applyMannequinStyles(topItem, bottomItem, layerItem, effectiveTemperature);
@@ -321,19 +480,16 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
 
 function chooseItem(group, context) {
   const allowedTypes = typeGroups[group];
-  const themeMatches = state.closet.filter((item) => allowedTypes.includes(item.type));
-
-  const exactTheme = themeMatches.filter((item) => item.theme === context.theme);
-  const themePool = exactTheme.length ? exactTheme : themeMatches;
+  const typedItems = state.closet.filter((item) => allowedTypes.includes(item.type));
+  const exactTheme = typedItems.filter((item) => item.theme === context.theme);
+  const themePool = exactTheme.length ? exactTheme : typedItems;
   const warmthTarget = desiredWarmth(context.effectiveTemperature, group, context.weather);
   const warmthMatches = themePool.filter((item) => item.warmth === warmthTarget);
   const warmthPool = warmthMatches.length ? warmthMatches : themePool;
-
   const styleMatches = warmthPool.filter((item) => {
-    const descriptor = `${item.name} ${item.style}`.toLowerCase();
+    const descriptor = `${item.name} ${describeStyle(item)}`.toLowerCase();
     return descriptor.includes(context.stylePreference.toLowerCase());
   });
-
   const finalPool = styleMatches.length ? styleMatches : warmthPool;
   return finalPool[0] || null;
 }
@@ -354,17 +510,12 @@ function applyMannequinStyles(topItem, bottomItem, layerItem, effectiveTemperatu
   elements.mannequinTop.style.background = colorForItem(topItem?.color, "#4ea35f");
   elements.mannequinBottom.style.background = colorForItem(bottomItem?.color, "#dbe8d7");
 
-  if (topItem?.type === "Dress") {
-    elements.mannequinTop.style.height = "150px";
-    elements.mannequinBottom.style.height = "96px";
-    elements.mannequinBottom.style.top = "230px";
-  } else {
-    elements.mannequinTop.style.height = effectiveTemperature < 55 ? "126px" : "112px";
-    elements.mannequinBottom.style.height = effectiveTemperature > 75 ? "98px" : "132px";
-    elements.mannequinBottom.style.top = "198px";
-  }
+  const longTop = topItem?.type === "Sweaters";
+  elements.mannequinTop.style.height = longTop || effectiveTemperature < 55 ? "126px" : "112px";
+  elements.mannequinBottom.style.height = effectiveTemperature > 75 ? "98px" : "132px";
+  elements.mannequinBottom.style.top = "198px";
 
-  if (layerItem && layerItem.type === "Outer Layer") {
+  if (layerItem && layerItem.type === "Jackets") {
     elements.mannequinLayer.style.height = effectiveTemperature < 60 ? "154px" : "126px";
     elements.mannequinLayer.style.opacity = "0.9";
     elements.mannequinLayer.style.background = colorForItem(layerItem.color, "#083910");
@@ -398,13 +549,14 @@ function buildRationale({
   return `${biasMessage}${capitalize(weather)} ${season.toLowerCase()} weather and a ${theme.toLowerCase()} theme push this suggestion toward ${stylePreference.toLowerCase()} styling. ${outfitMessage}`;
 }
 
-function getPlannerState() {
+function getPlannerState(formData = null) {
+  const source = formData || new FormData(elements.plannerForm);
   return {
-    temperature: Number(elements.temperature.value),
-    weather: document.querySelector("#weather").value,
-    season: elements.season.value,
-    theme: document.querySelector("#theme").value,
-    stylePreference: document.querySelector("#stylePreference").value,
+    temperature: Number(source.get("temperature")),
+    weather: source.get("weather"),
+    season: source.get("season"),
+    theme: source.get("theme"),
+    stylePreference: source.get("stylePreference"),
   };
 }
 
@@ -461,25 +613,31 @@ function persistObject(key, value) {
 }
 
 function describeItem(item) {
-  return `${item.name} in ${item.color}, tagged ${item.theme.toLowerCase()} and ${item.material.toLowerCase()}.`;
+  const materialNote = item.material ? ` in ${item.material.toLowerCase()}` : "";
+  return `${item.name} in ${item.color}, tagged ${item.theme.toLowerCase()} with a ${describeStyle(item).toLowerCase()} silhouette${materialNote}.`;
+}
+
+function describeStyle(item) {
+  return item.jewelryType ? `${item.style} (${item.jewelryType})` : item.style;
 }
 
 function colorForItem(colorName, fallback) {
   const colorMap = {
+    pink: "#d98eac",
+    red: "#ba5757",
+    orange: "#d78847",
+    yellow: "#d8c95a",
+    "light green": "#8fcb8d",
+    "dark green": "#2f6f3b",
+    "light blue": "#98c3e6",
+    "dark blue": "#416c9e",
+    "light purple": "#c2a6dc",
+    "dark purple": "#7c5aa7",
+    brown: "#8a644b",
+    grey: "#9da6ab",
+    gray: "#9da6ab",
     black: "#243428",
     white: "#f5f7f2",
-    cream: "#ebe8d6",
-    olive: "#6c8a52",
-    green: "#3f8f4c",
-    "deep green": "#1b5d2d",
-    blue: "#6f90c3",
-    denim: "#5f7999",
-    gray: "#a8b2aa",
-    grey: "#a8b2aa",
-    brown: "#8a644b",
-    tan: "#c6a57a",
-    pink: "#dc9aad",
-    red: "#b95f5f",
   };
 
   if (!colorName) return fallback;
