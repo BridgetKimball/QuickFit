@@ -2,6 +2,7 @@ const STORAGE_KEYS = {
   closet: "quickfit-closet",
   profile: "quickfit-profile",
   lastLocation: "quickfit-last-location",
+  favoriteOutfits: "quickfit-favorite-outfits",
 };
 
 const WEATHER_PROXY_URL = window.QUICKFIT_WEATHER_PROXY_URL || "/api/weather";
@@ -136,6 +137,22 @@ const typeGroups = {
 };
 
 const seasonOptions = ["Spring", "Summer", "Fall", "Winter"];
+const styleDirectionOptions = [
+  "Casual",
+  "Formal",
+  "Romantic",
+  "Sporty",
+  "Minimalist",
+  "Artsy",
+  "Retro",
+  "Edgy",
+  "Elegant",
+];
+const defaultProfile = {
+  temperatureBias: "neutral",
+  profileStyle: "Casual",
+  presentation: "Unspecified",
+};
 
 const defaultCloset = [];
 const legacySeedItemNames = [
@@ -146,12 +163,10 @@ const legacySeedItemNames = [
 
 const state = {
   closet: normalizeInitialCloset(loadCollection(STORAGE_KEYS.closet, defaultCloset)),
-  profile: loadObject(STORAGE_KEYS.profile, {
-    temperatureBias: "neutral",
-    profileStyle: "Balanced",
-    presentation: "Unspecified",
-  }),
+  profile: normalizeProfile(loadObject(STORAGE_KEYS.profile, defaultProfile)),
   weatherLocation: null,
+  favoriteOutfits: loadCollection(STORAGE_KEYS.favoriteOutfits, []),
+  currentRecommendation: null,
 };
 
 const mannequinSources = {
@@ -165,6 +180,7 @@ const elements = {
   heroNavButtons: document.querySelectorAll("[data-nav-target]"),
   plannerForm: document.querySelector("#planner-form"),
   outfitDate: document.querySelector("#outfit-date"),
+  stylePreferenceSelect: document.querySelector("#stylePreference"),
   temperature: document.querySelector("#temperature"),
   temperatureValue: document.querySelector("#temperature-value"),
   season: document.querySelector("#season"),
@@ -181,6 +197,7 @@ const elements = {
   closetForm: document.querySelector("#closet-form"),
   closetList: document.querySelector("#closet-list"),
   closetFilter: document.querySelector("#closet-filter"),
+  closetFavoriteFilter: document.querySelector("#closet-favorite-filter"),
   typeSelect: document.querySelector("#type"),
   styleSelect: document.querySelector("#style"),
   colorSelect: document.querySelector("#color"),
@@ -191,8 +208,12 @@ const elements = {
   weatherSelect: document.querySelector("#weather"),
   weatherStatus: document.querySelector("#weather-status"),
   refreshWeatherButton: document.querySelector("#refresh-weather"),
+  favoriteOutfitButton: document.querySelector("#favorite-outfit"),
   profileForm: document.querySelector("#profile-form"),
   profileSummary: document.querySelector("#profile-summary"),
+  profileStyleSelect: document.querySelector("#profileStyle"),
+  resetProfileButton: document.querySelector("#reset-profile"),
+  savedOutfitsList: document.querySelector("#saved-outfits-list"),
 };
 
 init();
@@ -200,8 +221,10 @@ init();
 async function init() {
   populateOutfitDate();
   populateSeasonOptions();
+  populateStyleDirectionOptions();
   populateTypeOptions();
   populateColorOptions();
+  setClosetFavoriteFilter("all");
   updateStyleOptions(elements.typeSelect.value);
   syncConditionalFields();
   populateClosetFilter();
@@ -304,6 +327,11 @@ function bindEvents() {
   });
 
   elements.closetFilter.addEventListener("change", renderCloset);
+  elements.closetFavoriteFilter.addEventListener("click", () => {
+    const favoritesOnly = elements.closetFavoriteFilter.dataset.mode === "favorites";
+    setClosetFavoriteFilter(favoritesOnly ? "all" : "favorites");
+    renderCloset();
+  });
 
   elements.profileForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -311,6 +339,17 @@ function bindEvents() {
     persistObject(STORAGE_KEYS.profile, state.profile);
     renderProfile();
     generateRecommendation(getPlannerState());
+  });
+
+  elements.resetProfileButton.addEventListener("click", () => {
+    state.profile = { ...defaultProfile };
+    persistObject(STORAGE_KEYS.profile, state.profile);
+    renderProfile();
+    generateRecommendation(getPlannerState());
+  });
+
+  elements.favoriteOutfitButton.addEventListener("click", () => {
+    toggleFavoriteCurrentOutfit();
   });
 }
 
@@ -335,6 +374,22 @@ function populateSeasonOptions() {
     option.textContent = season;
     option.selected = season === detectedSeason;
     elements.season.append(option);
+  });
+}
+
+function populateStyleDirectionOptions() {
+  populateSelectOptions(elements.stylePreferenceSelect, styleDirectionOptions);
+  populateSelectOptions(elements.profileStyleSelect, styleDirectionOptions);
+  elements.stylePreferenceSelect.value = defaultProfile.profileStyle;
+}
+
+function populateSelectOptions(selectElement, options) {
+  selectElement.innerHTML = "";
+  options.forEach((value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    selectElement.append(option);
   });
 }
 
@@ -746,6 +801,7 @@ function buildClosetItem(formData) {
     jewelryType: rawItem.jewelryType || "",
     theme: rawItem.theme,
     warmth: rawItem.warmth,
+    isFavorite: false,
   };
 }
 
@@ -764,9 +820,14 @@ function populateClosetFilter() {
 
 function renderCloset() {
   const filterValue = elements.closetFilter.value;
-  const filteredItems = filterValue === "all"
+  const favoriteFilterValue = elements.closetFavoriteFilter.dataset.mode || "all";
+  let filteredItems = filterValue === "all"
     ? state.closet
     : state.closet.filter((item) => item.type === filterValue);
+
+  if (favoriteFilterValue === "favorites") {
+    filteredItems = filteredItems.filter((item) => item.isFavorite);
+  }
 
   if (!filteredItems.length) {
     elements.closetList.innerHTML = `
@@ -790,7 +851,17 @@ function renderCloset() {
           <div class="closet-card__title">${item.name}</div>
           <p>${detailLine}</p>
         </div>
-        <button class="closet-card__delete" data-delete-id="${item.id}" type="button">Remove</button>
+        <div class="closet-card__actions">
+          <button
+            class="favorite-toggle ${item.isFavorite ? "is-active" : ""}"
+            data-favorite-id="${item.id}"
+            type="button"
+            aria-pressed="${item.isFavorite ? "true" : "false"}"
+          >
+            ${item.isFavorite ? "♥" : "♡"}
+          </button>
+          <button class="closet-card__delete" data-delete-id="${item.id}" type="button">Remove</button>
+        </div>
       </div>
       <div class="closet-card__meta">
         <span class="tag">${item.type}</span>
@@ -805,15 +876,36 @@ function renderCloset() {
       state.closet = state.closet.filter((entry) => entry.id !== item.id);
       persistCollection(STORAGE_KEYS.closet, state.closet);
       renderCloset();
+      renderSavedOutfits();
       generateRecommendation(getPlannerState());
+    });
+
+    card.querySelector("[data-favorite-id]")?.addEventListener("click", () => {
+      state.closet = state.closet.map((entry) => (
+        entry.id === item.id ? { ...entry, isFavorite: !entry.isFavorite } : entry
+      ));
+      persistCollection(STORAGE_KEYS.closet, state.closet);
+      renderCloset();
     });
 
     elements.closetList.append(card);
   });
 }
 
+function setClosetFavoriteFilter(mode) {
+  const favoritesOnly = mode === "favorites";
+  elements.closetFavoriteFilter.dataset.mode = mode;
+  elements.closetFavoriteFilter.classList.toggle("is-active", favoritesOnly);
+  elements.closetFavoriteFilter.setAttribute("aria-pressed", favoritesOnly ? "true" : "false");
+  elements.closetFavoriteFilter.textContent = favoritesOnly
+    ? "Showing Favorites Only"
+    : "Show Favorites Only";
+}
+
 function renderProfile() {
-  const { temperatureBias, profileStyle, presentation } = state.profile;
+  const normalizedProfile = normalizeProfile(state.profile);
+  state.profile = normalizedProfile;
+  const { temperatureBias, profileStyle, presentation } = normalizedProfile;
   const summaryItems = [
     `Temperature preference: ${formatLabel(temperatureBias)}`,
     `Style direction: ${profileStyle}`,
@@ -828,6 +920,7 @@ function renderProfile() {
   elements.profileForm.profileStyle.value = profileStyle;
   elements.profileForm.presentation.value = presentation;
   updateMannequinPresentation(presentation);
+  renderSavedOutfits();
 }
 
 function updateMannequinPresentation(presentation) {
@@ -858,7 +951,15 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
       ? "No extra layer selected yet. A jacket, scarf, or weather-ready accessory could help."
       : "No extra layer selected. Accessories can be added once your closet is set up.";
 
+  state.currentRecommendation = {
+    planner: { temperature, weather, season, theme, stylePreference, outfitDate: elements.outfitDate.value },
+    topItemId: topItem?.id || null,
+    bottomItemId: bottomItem?.id || null,
+    layerItemId: layerItem?.id || null,
+  };
+
   applyMannequinStyles(topItem, bottomItem, layerItem, effectiveTemperature);
+  syncFavoriteOutfitButton();
   elements.rationale.textContent = buildRationale({
     temperature,
     effectiveTemperature,
@@ -870,6 +971,116 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
     bottomItem,
     layerItem,
   });
+}
+
+function toggleFavoriteCurrentOutfit() {
+  const recommendation = state.currentRecommendation;
+  if (!recommendation || (!recommendation.topItemId && !recommendation.bottomItemId && !recommendation.layerItemId)) {
+    return;
+  }
+
+  const existingIndex = state.favoriteOutfits.findIndex((outfit) => isSameSavedOutfit(outfit, recommendation));
+
+  if (existingIndex >= 0) {
+    state.favoriteOutfits.splice(existingIndex, 1);
+  } else {
+    state.favoriteOutfits.unshift({
+      id: crypto.randomUUID(),
+      planner: recommendation.planner,
+      topItemId: recommendation.topItemId,
+      bottomItemId: recommendation.bottomItemId,
+      layerItemId: recommendation.layerItemId,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  persistCollection(STORAGE_KEYS.favoriteOutfits, state.favoriteOutfits);
+  syncFavoriteOutfitButton();
+  renderSavedOutfits();
+}
+
+function syncFavoriteOutfitButton() {
+  const recommendation = state.currentRecommendation;
+  const canSave = recommendation && (recommendation.topItemId || recommendation.bottomItemId || recommendation.layerItemId);
+  const isSaved = canSave && state.favoriteOutfits.some((outfit) => isSameSavedOutfit(outfit, recommendation));
+
+  elements.favoriteOutfitButton.disabled = !canSave;
+  elements.favoriteOutfitButton.classList.toggle("is-active", Boolean(isSaved));
+  elements.favoriteOutfitButton.setAttribute("aria-pressed", isSaved ? "true" : "false");
+  elements.favoriteOutfitButton.textContent = isSaved ? "♥ Saved Outfit" : "♡ Save This Outfit";
+}
+
+function isSameSavedOutfit(savedOutfit, recommendation) {
+  return (
+    savedOutfit.topItemId === recommendation.topItemId &&
+    savedOutfit.bottomItemId === recommendation.bottomItemId &&
+    savedOutfit.layerItemId === recommendation.layerItemId &&
+    savedOutfit.planner.theme === recommendation.planner.theme &&
+    savedOutfit.planner.stylePreference === recommendation.planner.stylePreference
+  );
+}
+
+function renderSavedOutfits() {
+  if (!state.favoriteOutfits.length) {
+    elements.savedOutfitsList.innerHTML = `
+      <div class="empty-state">
+        Save an outfit from the planner to build your personal favorites list.
+      </div>
+    `;
+    return;
+  }
+
+  elements.savedOutfitsList.innerHTML = "";
+
+  state.favoriteOutfits.forEach((outfit) => {
+    const card = document.createElement("article");
+    card.className = "saved-outfit-card";
+    const topItem = findClosetItem(outfit.topItemId);
+    const bottomItem = findClosetItem(outfit.bottomItemId);
+    const layerItem = findClosetItem(outfit.layerItemId);
+    const itemLabels = [topItem?.name, bottomItem?.name, layerItem?.name].filter(Boolean).join(" · ");
+
+    card.innerHTML = `
+      <strong>${outfit.planner.theme} · ${outfit.planner.stylePreference}</strong>
+      <div class="saved-outfit-card__items">${itemLabels || "Some saved items are no longer in the closet."}</div>
+      <div class="saved-outfit-card__actions">
+        <button class="button button--ghost button--small" type="button" data-load-outfit="${outfit.id}">Load Outfit</button>
+        <button class="button button--ghost button--small" type="button" data-remove-outfit="${outfit.id}">Remove</button>
+      </div>
+    `;
+
+    card.querySelector("[data-load-outfit]")?.addEventListener("click", () => {
+      loadSavedOutfit(outfit.id);
+    });
+
+    card.querySelector("[data-remove-outfit]")?.addEventListener("click", () => {
+      state.favoriteOutfits = state.favoriteOutfits.filter((entry) => entry.id !== outfit.id);
+      persistCollection(STORAGE_KEYS.favoriteOutfits, state.favoriteOutfits);
+      renderSavedOutfits();
+      syncFavoriteOutfitButton();
+    });
+
+    elements.savedOutfitsList.append(card);
+  });
+}
+
+function loadSavedOutfit(outfitId) {
+  const savedOutfit = state.favoriteOutfits.find((outfit) => outfit.id === outfitId);
+  if (!savedOutfit) return;
+
+  elements.outfitDate.value = savedOutfit.planner.outfitDate || elements.outfitDate.value;
+  elements.temperature.value = String(savedOutfit.planner.temperature);
+  elements.temperatureValue.textContent = `${savedOutfit.planner.temperature}°F`;
+  elements.weatherSelect.value = savedOutfit.planner.weather;
+  elements.season.value = savedOutfit.planner.season;
+  document.querySelector("#theme").value = savedOutfit.planner.theme;
+  elements.stylePreferenceSelect.value = savedOutfit.planner.stylePreference;
+  generateRecommendation(savedOutfit.planner);
+  setActiveSection("planner");
+}
+
+function findClosetItem(itemId) {
+  return state.closet.find((item) => item.id === itemId) || null;
 }
 
 function chooseItem(group, context) {
@@ -1012,6 +1223,18 @@ function normalizeInitialCloset(closet) {
 
   persistCollection(STORAGE_KEYS.closet, []);
   return [];
+}
+
+function normalizeProfile(profile) {
+  const normalizedProfileStyle = styleDirectionOptions.includes(profile?.profileStyle)
+    ? profile.profileStyle
+    : defaultProfile.profileStyle;
+
+  return {
+    temperatureBias: profile?.temperatureBias || defaultProfile.temperatureBias,
+    profileStyle: normalizedProfileStyle,
+    presentation: profile?.presentation || defaultProfile.presentation,
+  };
 }
 
 function persistCollection(key, value) {

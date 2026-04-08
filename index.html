@@ -155,13 +155,7 @@
 
               <label>
                 Style energy
-                <select name="stylePreference" id="stylePreference">
-                  <option value="Balanced">Balanced</option>
-                  <option value="Classic">Classic</option>
-                  <option value="Minimal">Minimal</option>
-                  <option value="Bold">Bold</option>
-                  <option value="Soft">Soft</option>
-                </select>
+                <select name="stylePreference" id="stylePreference"></select>
               </label>
 
               <button class="button button--primary" type="submit">
@@ -207,6 +201,15 @@
                   <p id="layer-recommendation">Outer layers and accessories will show up here.</p>
                 </div>
               </div>
+
+              <button
+                class="favorite-button"
+                id="favorite-outfit"
+                type="button"
+                aria-pressed="false"
+              >
+                ♡ Save This Outfit
+              </button>
             </div>
 
             <div class="insight-card">
@@ -321,6 +324,14 @@
                   <option value="all">All items</option>
                 </select>
               </label>
+              <button
+                class="button button--ghost closet-toolbar__toggle"
+                id="closet-favorite-filter"
+                type="button"
+                aria-pressed="false"
+              >
+                Show Favorites Only
+              </button>
             </div>
 
             <div id="closet-list" class="closet-list"></div>
@@ -346,13 +357,7 @@
                 </label>
                 <label>
                   Preferred style direction
-                  <select name="profileStyle">
-                    <option value="Balanced">Balanced</option>
-                    <option value="Classic">Classic</option>
-                    <option value="Minimal">Minimal</option>
-                    <option value="Bold">Bold</option>
-                    <option value="Soft">Soft</option>
-                  </select>
+                  <select name="profileStyle" id="profileStyle"></select>
                 </label>
               </div>
 
@@ -362,13 +367,17 @@
                   <option value="Unspecified">Unspecified</option>
                   <option value="Feminine">Feminine</option>
                   <option value="Masculine">Masculine</option>
-                  <option value="Androgynous">Androgynous</option>
                 </select>
               </label>
 
-              <button class="button button--primary" type="submit">
-                Save Profile
-              </button>
+              <div class="form-actions">
+                <button class="button button--primary" type="submit">
+                  Save Profile
+                </button>
+                <button class="button button--ghost" id="reset-profile" type="button">
+                  Reset Profile
+                </button>
+              </div>
             </form>
           </article>
 
@@ -378,6 +387,14 @@
               <h2>Profile summary</h2>
             </div>
             <div id="profile-summary" class="profile-summary"></div>
+
+            <div class="saved-outfits">
+              <div class="panel__header saved-outfits__header">
+                <p class="eyebrow">Saved looks</p>
+                <h3>Favorite outfits</h3>
+              </div>
+              <div id="saved-outfits-list" class="saved-outfits__list"></div>
+            </div>
           </article>
         </section>
       </main>
