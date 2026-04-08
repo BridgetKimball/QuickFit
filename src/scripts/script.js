@@ -279,6 +279,7 @@ function bindEvents() {
   });
 
   elements.refreshWeatherButton.addEventListener("click", async () => {
+    elements.outfitDate.value = formatDateInput(new Date());
     await loadWeatherDefaultsForSelection(true);
   });
 
