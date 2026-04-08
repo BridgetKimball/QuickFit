@@ -173,6 +173,12 @@ h3 {
   border: 1px solid rgba(15, 95, 32, 0.12);
 }
 
+.button--small {
+  width: fit-content;
+  padding: 10px 16px;
+  font-size: 0.94rem;
+}
+
 .section-nav {
   max-width: 1200px;
   margin: 8px auto 0;
@@ -229,6 +235,18 @@ h3 {
 .closet-form {
   display: grid;
   gap: 18px;
+}
+
+.weather-defaults {
+  display: grid;
+  gap: 10px;
+  margin-top: -4px;
+}
+
+.weather-defaults__status {
+  margin: 0;
+  color: rgba(8, 57, 16, 0.72);
+  line-height: 1.5;
 }
 
 label {

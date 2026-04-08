@@ -3,6 +3,9 @@ const STORAGE_KEYS = {
   profile: "quickfit-profile",
 };
 
+const OPENWEATHER_API_KEY = "";
+const OPENWEATHER_ONE_CALL_URL = "https://api.openweathermap.org/data/3.0/onecall";
+
 const clothingStyles = {
   Jackets: [
     "Leather jacket",
@@ -200,13 +203,16 @@ const elements = {
   customColorInput: document.querySelector("#customColor"),
   jewelryField: document.querySelector("#jewelry-field"),
   jewelryTypeSelect: document.querySelector("#jewelryType"),
+  weatherSelect: document.querySelector("#weather"),
+  weatherStatus: document.querySelector("#weather-status"),
+  refreshWeatherButton: document.querySelector("#refresh-weather"),
   profileForm: document.querySelector("#profile-form"),
   profileSummary: document.querySelector("#profile-summary"),
 };
 
 init();
 
-function init() {
+async function init() {
   populateSeasonOptions();
   populateTypeOptions();
   populateColorOptions();
@@ -217,6 +223,7 @@ function init() {
   renderCloset();
   renderProfile();
   generateRecommendation(getPlannerState());
+  await loadCurrentWeatherDefaults();
 }
 
 function bindEvents() {
@@ -230,6 +237,10 @@ function bindEvents() {
 
   elements.temperature.addEventListener("input", () => {
     elements.temperatureValue.textContent = `${elements.temperature.value}°F`;
+  });
+
+  elements.refreshWeatherButton.addEventListener("click", async () => {
+    await loadCurrentWeatherDefaults(true);
   });
 
   elements.plannerForm.addEventListener("submit", (event) => {
@@ -292,6 +303,7 @@ function setActiveSection(sectionId) {
 
 function populateSeasonOptions() {
   const detectedSeason = detectSeason(new Date());
+  elements.season.innerHTML = "";
   seasonOptions.forEach((season) => {
     const option = document.createElement("option");
     option.value = season;
@@ -299,6 +311,107 @@ function populateSeasonOptions() {
     option.selected = season === detectedSeason;
     elements.season.append(option);
   });
+}
+
+async function loadCurrentWeatherDefaults(triggeredManually = false) {
+  if (!("geolocation" in navigator)) {
+    elements.weatherStatus.textContent = "Location access is not supported in this browser, so QuickFit is using manual defaults.";
+    return;
+  }
+
+  elements.refreshWeatherButton.disabled = true;
+  elements.weatherStatus.textContent = triggeredManually
+    ? "Refreshing your current weather defaults."
+    : "Checking your local weather for the default planner values.";
+
+  try {
+    const position = await getCurrentPosition();
+    const weatherData = await fetchCurrentWeather(position.coords.latitude, position.coords.longitude);
+    applyWeatherDefaults(weatherData);
+  } catch (error) {
+    elements.weatherStatus.textContent = buildWeatherErrorMessage(error);
+  } finally {
+    elements.refreshWeatherButton.disabled = false;
+  }
+}
+
+function getCurrentPosition() {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 600000,
+    });
+  });
+}
+
+async function fetchCurrentWeather(latitude, longitude) {
+  if (!OPENWEATHER_API_KEY) {
+    throw new Error("OpenWeather API key is not configured");
+  }
+
+  const url = new URL(OPENWEATHER_ONE_CALL_URL);
+  url.searchParams.set("lat", latitude);
+  url.searchParams.set("lon", longitude);
+  url.searchParams.set("exclude", "minutely,hourly,daily,alerts");
+  url.searchParams.set("units", "imperial");
+  url.searchParams.set("appid", OPENWEATHER_API_KEY);
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`OpenWeather request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function applyWeatherDefaults(weatherData) {
+  const current = weatherData.current;
+  const temperature = Math.round(current.temp);
+  const weatherCategory = mapWeatherCondition(current.weather?.[0]?.main, current.weather?.[0]?.description);
+  const season = detectSeason(new Date((current.dt + weatherData.timezone_offset) * 1000));
+
+  elements.temperature.value = String(temperature);
+  elements.temperatureValue.textContent = `${temperature}°F`;
+  elements.weatherSelect.value = weatherCategory;
+  elements.season.value = season;
+  elements.weatherStatus.textContent = `Using your current local weather: ${temperature}°F and ${formatWeatherSummary(current.weather?.[0]?.description || current.weather?.[0]?.main || weatherCategory)}.`;
+  generateRecommendation(getPlannerState());
+}
+
+function mapWeatherCondition(mainCondition = "", description = "") {
+  const main = mainCondition.toLowerCase();
+  const details = description.toLowerCase();
+
+  if (main.includes("snow")) return "snowy";
+  if (main.includes("rain") || main.includes("drizzle") || main.includes("thunderstorm")) return "rainy";
+  if (main.includes("cloud")) return "cloudy";
+  if (main.includes("clear")) return "sunny";
+  if (details.includes("wind") || main.includes("squall") || main.includes("tornado")) return "windy";
+  return "sunny";
+}
+
+function buildWeatherErrorMessage(error) {
+  if (error?.code === 1) {
+    return "Location access was denied, so QuickFit is keeping the planner weather editable with manual defaults.";
+  }
+
+  if (error?.code === 2) {
+    return "QuickFit could not determine your location, so the planner is using manual defaults for now.";
+  }
+
+  if (error?.code === 3) {
+    return "Location lookup timed out, so QuickFit is using manual defaults until you try again.";
+  }
+
+  return "QuickFit could not load current weather right now, so the planner is using manual defaults.";
+}
+
+function formatWeatherSummary(summary) {
+  return summary
+    .split(" ")
+    .map((word) => capitalize(word))
+    .join(" ");
 }
 
 function populateTypeOptions() {
