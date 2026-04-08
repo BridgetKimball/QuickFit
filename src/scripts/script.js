@@ -137,47 +137,26 @@ const typeGroups = {
 
 const seasonOptions = ["Spring", "Summer", "Fall", "Winter"];
 
-const defaultCloset = [
-  {
-    id: crypto.randomUUID(),
-    name: "Forest weekend tee",
-    color: "Dark Green",
-    material: "Cotton",
-    type: "Shirts",
-    style: "T-shirt",
-    theme: "Casual",
-    warmth: "light",
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Cream straight trousers",
-    color: "White",
-    material: "",
-    type: "Pants",
-    style: "Straight",
-    theme: "Business-Casual",
-    warmth: "medium",
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Olive bomber layer",
-    color: "Dark Green",
-    material: "",
-    type: "Jackets",
-    style: "Bomber jacket",
-    theme: "Casual",
-    warmth: "medium",
-  },
+const defaultCloset = [];
+const legacySeedItemNames = [
+  "Forest weekend tee",
+  "Cream straight trousers",
+  "Olive bomber layer",
 ];
 
 const state = {
-  closet: loadCollection(STORAGE_KEYS.closet, defaultCloset),
+  closet: normalizeInitialCloset(loadCollection(STORAGE_KEYS.closet, defaultCloset)),
   profile: loadObject(STORAGE_KEYS.profile, {
     temperatureBias: "neutral",
     profileStyle: "Balanced",
     presentation: "Unspecified",
   }),
   weatherLocation: null,
+};
+
+const mannequinSources = {
+  default: "./images/Mannequin_Silhouette.png",
+  feminine: "./images/Mannequin_Silhouette2.png",
 };
 
 const elements = {
@@ -197,6 +176,8 @@ const elements = {
   mannequinTop: document.querySelector("#mannequin-top"),
   mannequinBottom: document.querySelector("#mannequin-bottom"),
   mannequinLayer: document.querySelector("#mannequin-layer"),
+  mannequinSilhouette: document.querySelector("#mannequin-silhouette"),
+  mannequinShell: document.querySelector(".mannequin__silhouette-shell"),
   closetForm: document.querySelector("#closet-form"),
   closetList: document.querySelector("#closet-list"),
   closetFilter: document.querySelector("#closet-filter"),
@@ -846,6 +827,16 @@ function renderProfile() {
   elements.profileForm.temperatureBias.value = temperatureBias;
   elements.profileForm.profileStyle.value = profileStyle;
   elements.profileForm.presentation.value = presentation;
+  updateMannequinPresentation(presentation);
+}
+
+function updateMannequinPresentation(presentation) {
+  const silhouetteSource = presentation === "Feminine"
+    ? mannequinSources.feminine
+    : mannequinSources.default;
+
+  elements.mannequinSilhouette.src = silhouetteSource;
+  elements.mannequinShell.style.setProperty("--mannequin-mask", `url("${silhouetteSource}")`);
 }
 
 function generateRecommendation({ temperature, weather, season, theme, stylePreference }) {
@@ -857,15 +848,15 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
   elements.weatherSummary.textContent = `${temperature}°F · ${capitalize(weather)} · ${season}`;
   elements.topRecommendation.textContent = topItem
     ? describeItem(topItem)
-    : "Add shirts or sweaters so QuickFit can suggest a top.";
+    : "No top selected yet. Add shirts or sweaters to your closet.";
   elements.bottomRecommendation.textContent = bottomItem
     ? describeItem(bottomItem)
-    : "Add pants, shorts, or skirts so QuickFit can finish the outfit.";
+    : "No bottom selected yet. Add pants, shorts, or skirts to your closet.";
   elements.layerRecommendation.textContent = layerItem
     ? describeItem(layerItem)
     : effectiveTemperature < 60 || weather === "rainy"
-      ? "A jacket, scarf, or weather-ready accessory would help here."
-      : "No extra layer needed right now, but accessories can elevate the look.";
+      ? "No extra layer selected yet. A jacket, scarf, or weather-ready accessory could help."
+      : "No extra layer selected. Accessories can be added once your closet is set up.";
 
   applyMannequinStyles(topItem, bottomItem, layerItem, effectiveTemperature);
   elements.rationale.textContent = buildRationale({
@@ -912,18 +903,35 @@ function desiredWarmth(temperature, group, weather) {
 function applyMannequinStyles(topItem, bottomItem, layerItem, effectiveTemperature) {
   elements.mannequinTop.style.background = colorForItem(topItem?.color, "#4ea35f");
   elements.mannequinBottom.style.background = colorForItem(bottomItem?.color, "#dbe8d7");
+  elements.mannequinLayer.style.background = colorForItem(layerItem?.color, "#083910");
 
-  const longTop = topItem?.type === "Sweaters";
-  elements.mannequinTop.style.height = longTop || effectiveTemperature < 55 ? "126px" : "112px";
-  elements.mannequinBottom.style.height = effectiveTemperature > 75 ? "98px" : "132px";
-  elements.mannequinBottom.style.top = "198px";
+  if (topItem) {
+    const topClip = topItem.type === "Sweaters"
+      ? "inset(14% 18% 34% 18%)"
+      : "inset(16% 20% 42% 20%)";
+    elements.mannequinTop.style.clipPath = topClip;
+    elements.mannequinTop.style.opacity = "0.92";
+  } else {
+    elements.mannequinTop.style.opacity = "0";
+  }
+
+  if (bottomItem) {
+    const bottomClip = effectiveTemperature > 75
+      ? "inset(58% 24% 24% 24%)"
+      : "inset(52% 24% 10% 24%)";
+    elements.mannequinBottom.style.clipPath = bottomClip;
+    elements.mannequinBottom.style.opacity = "0.9";
+  } else {
+    elements.mannequinBottom.style.opacity = "0";
+  }
 
   if (layerItem && layerItem.type === "Jackets") {
-    elements.mannequinLayer.style.height = effectiveTemperature < 60 ? "154px" : "126px";
-    elements.mannequinLayer.style.opacity = "0.9";
-    elements.mannequinLayer.style.background = colorForItem(layerItem.color, "#083910");
+    const layerClip = effectiveTemperature < 60
+      ? "inset(12% 12% 30% 12%)"
+      : "inset(14% 14% 38% 14%)";
+    elements.mannequinLayer.style.clipPath = layerClip;
+    elements.mannequinLayer.style.opacity = "0.82";
   } else {
-    elements.mannequinLayer.style.height = "0";
     elements.mannequinLayer.style.opacity = "0";
   }
 }
@@ -946,7 +954,7 @@ function buildRationale({
   const outfitMessage = [
     topItem ? `${topItem.name} handles the top layer.` : "You still need a saved top option.",
     bottomItem ? `${bottomItem.name} anchors the outfit.` : "A saved bottom will help complete the look.",
-    layerItem ? `${layerItem.name} adds extra weather protection.` : "No extra layer was required from your closet.",
+    layerItem ? `${layerItem.name} adds extra weather protection.` : "No extra layer was selected from your closet.",
   ].join(" ");
 
   return `${biasMessage}${capitalize(weather)} ${season.toLowerCase()} weather and a ${theme.toLowerCase()} theme push this suggestion toward ${stylePreference.toLowerCase()} styling. ${outfitMessage}`;
@@ -990,6 +998,20 @@ function loadCollection(key, fallback) {
     persistCollection(key, fallback);
     return fallback;
   }
+}
+
+function normalizeInitialCloset(closet) {
+  const itemNames = closet.map((item) => item.name).sort();
+  const isLegacySeedCloset =
+    closet.length === legacySeedItemNames.length &&
+    legacySeedItemNames.every((name) => itemNames.includes(name));
+
+  if (!isLegacySeedCloset) {
+    return closet;
+  }
+
+  persistCollection(STORAGE_KEYS.closet, []);
+  return [];
 }
 
 function persistCollection(key, value) {

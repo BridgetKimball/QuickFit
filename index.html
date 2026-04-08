@@ -179,10 +179,17 @@
             <div class="mannequin-card">
               <div class="weather-chip" id="weather-summary"></div>
               <div class="mannequin" aria-hidden="true">
-                <div class="mannequin__head"></div>
-                <div class="mannequin__torso" id="mannequin-top"></div>
-                <div class="mannequin__legs" id="mannequin-bottom"></div>
-                <div class="mannequin__extra" id="mannequin-layer"></div>
+                <div class="mannequin__silhouette-shell">
+                  <img
+                    class="mannequin__silhouette"
+                    id="mannequin-silhouette"
+                    src="./images/Mannequin_Silhouette.png"
+                    alt=""
+                  >
+                  <div class="mannequin__garment mannequin__garment--top" id="mannequin-top"></div>
+                  <div class="mannequin__garment mannequin__garment--bottom" id="mannequin-bottom"></div>
+                  <div class="mannequin__garment mannequin__garment--layer" id="mannequin-layer"></div>
+                </div>
                 <div class="mannequin__base"></div>
               </div>
 
