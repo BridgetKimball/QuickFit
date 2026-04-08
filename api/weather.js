@@ -69,3 +69,7 @@ module.exports = async function handler(req, res) {
     return res.status(502).json({ message: "Weather proxy could not reach OpenWeather" });
   }
 };
+
+module.exports.config = {
+  runtime: "nodejs18.x",
+};

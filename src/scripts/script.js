@@ -2,12 +2,9 @@ const STORAGE_KEYS = {
   closet: "quickfit-closet",
   profile: "quickfit-profile",
   lastLocation: "quickfit-last-location",
-  weatherApiKey: "quickfit-openweather-api-key",
 };
 
 const WEATHER_PROXY_URL = window.QUICKFIT_WEATHER_PROXY_URL || "/api/weather";
-const OPENWEATHER_CURRENT_URL = "https://api.openweathermap.org/data/2.5/weather";
-const OPENWEATHER_FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast";
 
 const clothingStyles = {
   Jackets: [
@@ -243,7 +240,7 @@ async function initializeWeatherAccess() {
     return;
   }
 
-  elements.weatherStatus.textContent = "Click 'Use My Current Weather' to share location and auto-fill weather. Your browser will ask for permission.";
+  elements.weatherStatus.textContent = "Click 'Use My Current Weather' to share location and load weather from the secure proxy.";
 
   if (!("permissions" in navigator) || typeof navigator.permissions.query !== "function") {
     return;
@@ -451,15 +448,7 @@ async function fetchForecastWeather(latitude, longitude) {
 }
 
 async function fetchWeatherData(type, latitude, longitude) {
-  try {
-    return await fetchWeatherFromProxy(type, latitude, longitude);
-  } catch (error) {
-    if (!error?.proxyUnavailable) {
-      throw error;
-    }
-
-    return fetchWeatherDirect(type, latitude, longitude);
-  }
+  return fetchWeatherFromProxy(type, latitude, longitude);
 }
 
 async function fetchWeatherFromProxy(type, latitude, longitude) {
@@ -494,68 +483,6 @@ async function fetchWeatherFromProxy(type, latitude, longitude) {
   }
 
   return response.json();
-}
-
-async function fetchWeatherDirect(type, latitude, longitude) {
-  let apiKey = readWeatherApiKey();
-
-  if (!apiKey) {
-    apiKey = promptForWeatherApiKey();
-  }
-
-  if (!apiKey) {
-    const error = new Error("OpenWeather API key is not configured");
-    error.missingClientKey = true;
-    throw error;
-  }
-
-  const upstreamUrl = new URL(type === "forecast" ? OPENWEATHER_FORECAST_URL : OPENWEATHER_CURRENT_URL);
-  upstreamUrl.searchParams.set("lat", String(latitude));
-  upstreamUrl.searchParams.set("lon", String(longitude));
-  upstreamUrl.searchParams.set("units", "imperial");
-  upstreamUrl.searchParams.set("appid", apiKey);
-
-  const response = await fetch(upstreamUrl.toString(), {
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    const error = new Error(`OpenWeather request failed with status ${response.status}`);
-    error.status = response.status;
-    throw error;
-  }
-
-  return response.json();
-}
-
-function readWeatherApiKey() {
-  const runtimeKey =
-    typeof window.QUICKFIT_OPENWEATHER_API_KEY === "string"
-      ? window.QUICKFIT_OPENWEATHER_API_KEY.trim()
-      : "";
-
-  if (runtimeKey) {
-    return runtimeKey;
-  }
-
-  const localKey = localStorage.getItem(STORAGE_KEYS.weatherApiKey);
-  return localKey ? localKey.trim() : "";
-}
-
-function promptForWeatherApiKey() {
-  const input = window.prompt(
-    "QuickFit could not reach the weather proxy. Enter your OpenWeather API key to fetch weather directly in this browser session."
-  );
-
-  const apiKey = input ? input.trim() : "";
-  if (!apiKey) {
-    return "";
-  }
-
-  localStorage.setItem(STORAGE_KEYS.weatherApiKey, apiKey);
-  return apiKey;
 }
 
 function applyCurrentWeatherDefaults(weatherData, forecastData, selectedDate) {
@@ -672,12 +599,8 @@ function buildWeatherErrorMessage(error) {
     return "Weather service authentication failed. Check the server-side OpenWeather API key configuration.";
   }
 
-  if (error?.missingClientKey) {
-    return "Weather proxy is unavailable and no browser key was provided. Click 'Use My Current Weather' again to enter your OpenWeather API key.";
-  }
-
   if (error?.proxyUnavailable) {
-    return "The weather proxy is unavailable right now. QuickFit can still use direct OpenWeather requests after you provide your key in the prompt.";
+    return "The weather proxy is unavailable right now. This app must be deployed with /api/weather and an OPENWEATHER_API_KEY host secret.";
   }
 
   if (error?.status === 429) {
