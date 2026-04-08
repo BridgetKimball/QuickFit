@@ -28,6 +28,18 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Write runtime weather config
+        env:
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+        run: |
+          if [ -z "$OPENWEATHER_API_KEY" ]; then
+            echo "OPENWEATHER_API_KEY secret is required for weather support"
+            exit 1
+          fi
+
+          mkdir -p src/scripts
+          printf 'window.QUICKFIT_OPENWEATHER_API_KEY = "%s";\n' "$OPENWEATHER_API_KEY" > src/scripts/runtime-config.js
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

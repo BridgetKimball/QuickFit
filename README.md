@@ -68,31 +68,29 @@ The goal is to turn a daily routine into a faster, easier decision without makin
 
 ## Secure Weather Setup
 
-QuickFit uses a server-side weather proxy at `/api/weather` so the OpenWeather key stays on the host and never appears in the browser or in git history.
+QuickFit uses a deployment-time weather config so the OpenWeather key stays out of the repository.
 
 ### Deploy path
 
-Use a host that supports serverless functions, such as Vercel.
+This repo is set up for GitHub Pages via GitHub Actions.
 
-### Set the secret on the host
+### Set the secret in GitHub
 
-Add this environment variable in the deployment platform settings:
+Add this repository secret in GitHub Settings:
 
 - `OPENWEATHER_API_KEY=<your-real-key>`
 
-Do not put the real key in tracked source files.
-
 ### How it works
 
-1. The browser sends location coordinates to `/api/weather`.
-2. The serverless function reads `OPENWEATHER_API_KEY` from host secrets.
-3. The function requests OpenWeather and returns the weather response to the browser.
+1. GitHub Actions writes `src/scripts/runtime-config.js` during the Pages build.
+2. The browser loads that generated file before `script.js`.
+3. QuickFit uses the injected key to fetch weather and compute selected-date highs and lows.
 
-This lets every user share the same API key without exposing it in the repository.
+This keeps the key out of the Git repository while still letting every user share the same weather key.
 
-### Important note
+### Optional serverless path
 
-GitHub Pages alone cannot keep the key secret because it does not run serverless functions. If you want the key hidden and shared for all users, deploy QuickFit on a serverless host.
+The repo also includes `api/weather.js` if you later move to a host that supports serverless functions.
 
 ---
 
