@@ -66,6 +66,56 @@ The goal is to turn a daily routine into a faster, easier decision without makin
 4. QuickFit suggests an outfit from saved clothing items.
 5. The user previews the look on a mannequin and finalizes it.
 
+## Secure Weather Proxy Setup
+
+QuickFit now expects weather requests to go through a server-side proxy endpoint at `/api/weather`.
+This keeps the OpenWeather key off the client and out of git history.
+
+### 1. Add the serverless function
+
+The repository includes `api/weather.js` (Vercel-style serverless function).
+
+### 2. Configure environment variable on your host
+
+Set this variable in your deployment platform:
+
+- `OPENWEATHER_API_KEY=<your-real-key>`
+
+Do not commit the real key in source files.
+
+### 3. Deploy on a host that supports serverless routes
+
+For example: Vercel.
+
+If you keep using GitHub Pages only, the app will still work, but live weather calls will fail because static hosting does not run `/api/weather`.
+
+### 4. Optional: use an external proxy URL from static hosting
+
+If your frontend is on a different domain (such as GitHub Pages), set this before loading `script.js`:
+
+```html
+<script>
+  window.QUICKFIT_WEATHER_PROXY_URL = "https://your-proxy-domain.example.com/api/weather";
+</script>
+```
+
+The frontend will use that URL instead of the default `/api/weather` path.
+
+### 5. Static-host fallback (no proxy runtime)
+
+If you are running on a static host without serverless functions (for example GitHub Pages), QuickFit will prompt for an OpenWeather API key in the browser and store it in local storage.
+
+You can also pre-set runtime values before `script.js` loads:
+
+```html
+<script>
+  window.QUICKFIT_OPENWEATHER_API_KEY = "your-key";
+  window.QUICKFIT_WEATHER_PROXY_URL = "https://your-proxy-domain.example.com/api/weather";
+</script>
+```
+
+Do not commit real keys in tracked source files.
+
 ---
 
 ## App Pages

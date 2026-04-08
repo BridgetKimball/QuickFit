@@ -2,9 +2,10 @@ const STORAGE_KEYS = {
   closet: "quickfit-closet",
   profile: "quickfit-profile",
   lastLocation: "quickfit-last-location",
+  weatherApiKey: "quickfit-openweather-api-key",
 };
 
-const OPENWEATHER_API_KEY = "";
+const WEATHER_PROXY_URL = window.QUICKFIT_WEATHER_PROXY_URL || "/api/weather";
 const OPENWEATHER_CURRENT_URL = "https://api.openweathermap.org/data/2.5/weather";
 const OPENWEATHER_FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast";
 
@@ -236,11 +237,6 @@ async function initializeWeatherAccess() {
     return;
   }
 
-  if (!OPENWEATHER_API_KEY) {
-    elements.weatherStatus.textContent = "Live weather is unavailable right now because the OpenWeather API key is missing.";
-    return;
-  }
-
   if (!("geolocation" in navigator)) {
     elements.weatherStatus.textContent = "Location access is not supported in this browser, so QuickFit is using manual defaults.";
     elements.refreshWeatherButton.disabled = true;
@@ -284,7 +280,6 @@ function bindEvents() {
   });
 
   elements.refreshWeatherButton.addEventListener("click", async () => {
-    elements.outfitDate.value = formatDateInput(new Date());
     await loadWeatherDefaultsForSelection(true);
   });
 
@@ -376,11 +371,6 @@ async function loadCurrentWeatherDefaults(triggeredManually = false) {
 }
 
 async function loadWeatherDefaultsForSelection(triggeredManually = false) {
-  if (!OPENWEATHER_API_KEY) {
-    elements.weatherStatus.textContent = "Live weather is unavailable right now because the OpenWeather API key is missing.";
-    return;
-  }
-
   if (!("geolocation" in navigator)) {
     elements.weatherStatus.textContent = "Location access is not supported in this browser, so QuickFit is using manual defaults.";
     return;
@@ -453,25 +443,84 @@ function getCurrentPosition() {
 }
 
 async function fetchCurrentWeather(latitude, longitude) {
-  return fetchOpenWeatherJson(OPENWEATHER_CURRENT_URL, latitude, longitude);
+  return fetchWeatherData("current", latitude, longitude);
 }
 
 async function fetchForecastWeather(latitude, longitude) {
-  return fetchOpenWeatherJson(OPENWEATHER_FORECAST_URL, latitude, longitude);
+  return fetchWeatherData("forecast", latitude, longitude);
 }
 
-async function fetchOpenWeatherJson(baseUrl, latitude, longitude) {
-  if (!OPENWEATHER_API_KEY) {
-    throw new Error("OpenWeather API key is not configured");
-  }
+async function fetchWeatherData(type, latitude, longitude) {
+  try {
+    return await fetchWeatherFromProxy(type, latitude, longitude);
+  } catch (error) {
+    if (!error?.proxyUnavailable) {
+      throw error;
+    }
 
-  const url = new URL(baseUrl);
+    return fetchWeatherDirect(type, latitude, longitude);
+  }
+}
+
+async function fetchWeatherFromProxy(type, latitude, longitude) {
+  const url = new URL(WEATHER_PROXY_URL, window.location.origin);
+  url.searchParams.set("type", type);
   url.searchParams.set("lat", latitude);
   url.searchParams.set("lon", longitude);
-  url.searchParams.set("units", "imperial");
-  url.searchParams.set("appid", OPENWEATHER_API_KEY);
 
-  const response = await fetch(url);
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    let message = `Weather request failed with status ${response.status}`;
+    try {
+      const errorPayload = await response.json();
+      if (errorPayload?.message) {
+        message = errorPayload.message;
+      }
+    } catch (_error) {
+      // Keep default message if payload is not JSON.
+    }
+
+    const error = new Error(message);
+    error.status = response.status;
+    if (response.status === 404 || response.status === 503) {
+      error.proxyUnavailable = true;
+    }
+    throw error;
+  }
+
+  return response.json();
+}
+
+async function fetchWeatherDirect(type, latitude, longitude) {
+  let apiKey = readWeatherApiKey();
+
+  if (!apiKey) {
+    apiKey = promptForWeatherApiKey();
+  }
+
+  if (!apiKey) {
+    const error = new Error("OpenWeather API key is not configured");
+    error.missingClientKey = true;
+    throw error;
+  }
+
+  const upstreamUrl = new URL(type === "forecast" ? OPENWEATHER_FORECAST_URL : OPENWEATHER_CURRENT_URL);
+  upstreamUrl.searchParams.set("lat", String(latitude));
+  upstreamUrl.searchParams.set("lon", String(longitude));
+  upstreamUrl.searchParams.set("units", "imperial");
+  upstreamUrl.searchParams.set("appid", apiKey);
+
+  const response = await fetch(upstreamUrl.toString(), {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
   if (!response.ok) {
     const error = new Error(`OpenWeather request failed with status ${response.status}`);
     error.status = response.status;
@@ -479,6 +528,34 @@ async function fetchOpenWeatherJson(baseUrl, latitude, longitude) {
   }
 
   return response.json();
+}
+
+function readWeatherApiKey() {
+  const runtimeKey =
+    typeof window.QUICKFIT_OPENWEATHER_API_KEY === "string"
+      ? window.QUICKFIT_OPENWEATHER_API_KEY.trim()
+      : "";
+
+  if (runtimeKey) {
+    return runtimeKey;
+  }
+
+  const localKey = localStorage.getItem(STORAGE_KEYS.weatherApiKey);
+  return localKey ? localKey.trim() : "";
+}
+
+function promptForWeatherApiKey() {
+  const input = window.prompt(
+    "QuickFit could not reach the weather proxy. Enter your OpenWeather API key to fetch weather directly in this browser session."
+  );
+
+  const apiKey = input ? input.trim() : "";
+  if (!apiKey) {
+    return "";
+  }
+
+  localStorage.setItem(STORAGE_KEYS.weatherApiKey, apiKey);
+  return apiKey;
 }
 
 function applyCurrentWeatherDefaults(weatherData, forecastData, selectedDate) {
@@ -592,7 +669,15 @@ function buildWeatherErrorMessage(error) {
   }
 
   if (error?.status === 401) {
-    return "OpenWeather rejected the API key. Double-check that the key is active and copied correctly.";
+    return "Weather service authentication failed. Check the server-side OpenWeather API key configuration.";
+  }
+
+  if (error?.missingClientKey) {
+    return "Weather proxy is unavailable and no browser key was provided. Click 'Use My Current Weather' again to enter your OpenWeather API key.";
+  }
+
+  if (error?.proxyUnavailable) {
+    return "The weather proxy is unavailable right now. QuickFit can still use direct OpenWeather requests after you provide your key in the prompt.";
   }
 
   if (error?.status === 429) {
