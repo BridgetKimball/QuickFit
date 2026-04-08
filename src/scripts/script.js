@@ -1,10 +1,12 @@
 const STORAGE_KEYS = {
   closet: "quickfit-closet",
   profile: "quickfit-profile",
+  lastLocation: "quickfit-last-location",
 };
 
 const OPENWEATHER_API_KEY = "";
-const OPENWEATHER_ONE_CALL_URL = "https://api.openweathermap.org/data/3.0/onecall";
+const OPENWEATHER_CURRENT_URL = "https://api.openweathermap.org/data/2.5/weather";
+const OPENWEATHER_FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast";
 
 const clothingStyles = {
   Jackets: [
@@ -175,6 +177,7 @@ const state = {
     profileStyle: "Balanced",
     presentation: "Unspecified",
   }),
+  weatherLocation: null,
 };
 
 const elements = {
@@ -182,6 +185,7 @@ const elements = {
   navButtons: document.querySelectorAll(".section-nav__link"),
   heroNavButtons: document.querySelectorAll("[data-nav-target]"),
   plannerForm: document.querySelector("#planner-form"),
+  outfitDate: document.querySelector("#outfit-date"),
   temperature: document.querySelector("#temperature"),
   temperatureValue: document.querySelector("#temperature-value"),
   season: document.querySelector("#season"),
@@ -213,6 +217,7 @@ const elements = {
 init();
 
 async function init() {
+  populateOutfitDate();
   populateSeasonOptions();
   populateTypeOptions();
   populateColorOptions();
@@ -223,7 +228,46 @@ async function init() {
   renderCloset();
   renderProfile();
   generateRecommendation(getPlannerState());
-  await loadCurrentWeatherDefaults();
+  await initializeWeatherAccess();
+}
+
+async function initializeWeatherAccess() {
+  if (!elements.weatherStatus || !elements.refreshWeatherButton) {
+    return;
+  }
+
+  if (!OPENWEATHER_API_KEY) {
+    elements.weatherStatus.textContent = "Live weather is unavailable right now because the OpenWeather API key is missing.";
+    return;
+  }
+
+  if (!("geolocation" in navigator)) {
+    elements.weatherStatus.textContent = "Location access is not supported in this browser, so QuickFit is using manual defaults.";
+    elements.refreshWeatherButton.disabled = true;
+    return;
+  }
+
+  elements.weatherStatus.textContent = "Click 'Use My Current Weather' to share location and auto-fill weather. Your browser will ask for permission.";
+
+  if (!("permissions" in navigator) || typeof navigator.permissions.query !== "function") {
+    return;
+  }
+
+  try {
+    const geolocationPermission = await navigator.permissions.query({ name: "geolocation" });
+
+    if (geolocationPermission.state === "granted") {
+      elements.weatherStatus.textContent = "Location already allowed. Refreshing your local weather defaults.";
+      await loadCurrentWeatherDefaults(false);
+      return;
+    }
+
+    if (geolocationPermission.state === "denied") {
+      elements.weatherStatus.textContent = "Location access is blocked in browser settings, so QuickFit is using manual defaults.";
+    }
+  } catch (_error) {
+    // Ignore permissions API failures and keep the click-to-consent flow.
+  }
 }
 
 function bindEvents() {
@@ -240,7 +284,12 @@ function bindEvents() {
   });
 
   elements.refreshWeatherButton.addEventListener("click", async () => {
-    await loadCurrentWeatherDefaults(true);
+    elements.outfitDate.value = formatDateInput(new Date());
+    await loadWeatherDefaultsForSelection(true);
+  });
+
+  elements.outfitDate.addEventListener("change", async () => {
+    await loadWeatherDefaultsForSelection(true);
   });
 
   elements.plannerForm.addEventListener("submit", (event) => {
@@ -313,25 +362,83 @@ function populateSeasonOptions() {
   });
 }
 
+function populateOutfitDate() {
+  const today = new Date();
+  const maxDate = new Date(today);
+  maxDate.setDate(today.getDate() + 5);
+  elements.outfitDate.value = formatDateInput(today);
+  elements.outfitDate.min = formatDateInput(today);
+  elements.outfitDate.max = formatDateInput(maxDate);
+}
+
 async function loadCurrentWeatherDefaults(triggeredManually = false) {
+  return loadWeatherDefaultsForSelection(triggeredManually);
+}
+
+async function loadWeatherDefaultsForSelection(triggeredManually = false) {
+  if (!OPENWEATHER_API_KEY) {
+    elements.weatherStatus.textContent = "Live weather is unavailable right now because the OpenWeather API key is missing.";
+    return;
+  }
+
   if (!("geolocation" in navigator)) {
     elements.weatherStatus.textContent = "Location access is not supported in this browser, so QuickFit is using manual defaults.";
     return;
   }
 
   elements.refreshWeatherButton.disabled = true;
+  elements.outfitDate.disabled = true;
+  const selectedDate = parseSelectedDate();
   elements.weatherStatus.textContent = triggeredManually
-    ? "Refreshing your current weather defaults."
+    ? `Loading weather for ${formatDisplayDate(selectedDate)} in your current location.`
     : "Checking your local weather for the default planner values.";
 
   try {
     const position = await getCurrentPosition();
-    const weatherData = await fetchCurrentWeather(position.coords.latitude, position.coords.longitude);
-    applyWeatherDefaults(weatherData);
+    const location = {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+    };
+    state.weatherLocation = location;
+    persistObject(STORAGE_KEYS.lastLocation, location);
+
+    if (isToday(selectedDate)) {
+      const [weatherData, forecastData] = await Promise.all([
+        fetchCurrentWeather(location.latitude, location.longitude),
+        fetchForecastWeather(location.latitude, location.longitude),
+      ]);
+      applyCurrentWeatherDefaults(weatherData, forecastData, selectedDate);
+    } else {
+      const forecastData = await fetchForecastWeather(location.latitude, location.longitude);
+      applyForecastWeatherDefaults(forecastData, selectedDate);
+    }
   } catch (error) {
-    elements.weatherStatus.textContent = buildWeatherErrorMessage(error);
+    const cachedLocation = loadObject(STORAGE_KEYS.lastLocation, null);
+    if (error?.code === 3 && cachedLocation?.latitude && cachedLocation?.longitude) {
+      state.weatherLocation = cachedLocation;
+      elements.weatherStatus.textContent = `Location lookup timed out, so QuickFit is using your last saved location for ${formatDisplayDate(selectedDate)}.`;
+
+      try {
+        if (isToday(selectedDate)) {
+          const [weatherData, forecastData] = await Promise.all([
+            fetchCurrentWeather(cachedLocation.latitude, cachedLocation.longitude),
+            fetchForecastWeather(cachedLocation.latitude, cachedLocation.longitude),
+          ]);
+          applyCurrentWeatherDefaults(weatherData, forecastData, selectedDate);
+        } else {
+          const forecastData = await fetchForecastWeather(cachedLocation.latitude, cachedLocation.longitude);
+          applyForecastWeatherDefaults(forecastData, selectedDate);
+        }
+        return;
+      } catch (cachedLocationError) {
+        elements.weatherStatus.textContent = buildWeatherErrorMessage(cachedLocationError);
+      }
+    } else {
+      elements.weatherStatus.textContent = buildWeatherErrorMessage(error);
+    }
   } finally {
     elements.refreshWeatherButton.disabled = false;
+    elements.outfitDate.disabled = false;
   }
 }
 
@@ -339,56 +446,136 @@ function getCurrentPosition() {
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(resolve, reject, {
       enableHighAccuracy: false,
-      timeout: 10000,
-      maximumAge: 600000,
+      timeout: 20000,
+      maximumAge: 3600000,
     });
   });
 }
 
 async function fetchCurrentWeather(latitude, longitude) {
+  return fetchOpenWeatherJson(OPENWEATHER_CURRENT_URL, latitude, longitude);
+}
+
+async function fetchForecastWeather(latitude, longitude) {
+  return fetchOpenWeatherJson(OPENWEATHER_FORECAST_URL, latitude, longitude);
+}
+
+async function fetchOpenWeatherJson(baseUrl, latitude, longitude) {
   if (!OPENWEATHER_API_KEY) {
     throw new Error("OpenWeather API key is not configured");
   }
 
-  const url = new URL(OPENWEATHER_ONE_CALL_URL);
+  const url = new URL(baseUrl);
   url.searchParams.set("lat", latitude);
   url.searchParams.set("lon", longitude);
-  url.searchParams.set("exclude", "minutely,hourly,daily,alerts");
   url.searchParams.set("units", "imperial");
   url.searchParams.set("appid", OPENWEATHER_API_KEY);
 
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`OpenWeather request failed with status ${response.status}`);
+    const error = new Error(`OpenWeather request failed with status ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
 
   return response.json();
 }
 
-function applyWeatherDefaults(weatherData) {
-  const current = weatherData.current;
-  const temperature = Math.round(current.temp);
-  const weatherCategory = mapWeatherCondition(current.weather?.[0]?.main, current.weather?.[0]?.description);
-  const season = detectSeason(new Date((current.dt + weatherData.timezone_offset) * 1000));
+function applyCurrentWeatherDefaults(weatherData, forecastData, selectedDate) {
+  const temperature = Math.round(weatherData.main.temp);
+  const dayEntries = forecastData?.list?.filter((entry) => isSameForecastDay(entry.dt, selectedDate)) || [];
+  const forecastHigh = dayEntries.length
+    ? Math.max(...dayEntries.map((entry) => entry.main.temp_max))
+    : weatherData.main.temp_max;
+  const forecastLow = dayEntries.length
+    ? Math.min(...dayEntries.map((entry) => entry.main.temp_min))
+    : weatherData.main.temp_min;
+  const highTemperature = Math.round(Math.max(weatherData.main.temp, forecastHigh));
+  const lowTemperature = Math.round(Math.min(weatherData.main.temp, forecastLow));
+  const weatherCategory = mapWeatherCondition(
+    weatherData.weather?.[0]?.main,
+    weatherData.weather?.[0]?.description,
+    weatherData.wind?.speed
+  );
+  const season = detectSeason(new Date((weatherData.dt + weatherData.timezone) * 1000));
+  const locationName = weatherData.name || "your area";
+  const conditionLabel = weatherData.weather?.[0]?.description || weatherData.weather?.[0]?.main || weatherCategory;
 
   elements.temperature.value = String(temperature);
   elements.temperatureValue.textContent = `${temperature}°F`;
   elements.weatherSelect.value = weatherCategory;
   elements.season.value = season;
-  elements.weatherStatus.textContent = `Using your current local weather: ${temperature}°F and ${formatWeatherSummary(current.weather?.[0]?.description || current.weather?.[0]?.main || weatherCategory)}.`;
+  elements.weatherStatus.textContent = `Using current weather for ${locationName}:\nHigh of ${highTemperature}°F and Low of ${lowTemperature}°F and ${formatWeatherSummary(conditionLabel)}.`;
   generateRecommendation(getPlannerState());
 }
 
-function mapWeatherCondition(mainCondition = "", description = "") {
+function applyForecastWeatherDefaults(forecastData, selectedDate) {
+  const dayEntries = forecastData.list.filter((entry) => isSameForecastDay(entry.dt, selectedDate));
+  if (!dayEntries.length) {
+    const error = new Error("Forecast unavailable for selected date");
+    error.forecastUnavailable = true;
+    throw error;
+  }
+
+  const representativeEntry = selectRepresentativeForecastEntry(dayEntries);
+  const highTemperature = Math.round(Math.max(...dayEntries.map((entry) => entry.main.temp_max)));
+  const lowTemperature = Math.round(Math.min(...dayEntries.map((entry) => entry.main.temp_min)));
+  const temperature = Math.round(representativeEntry.main.temp);
+  const weatherCategory = mapWeatherCondition(
+    representativeEntry.weather?.[0]?.main,
+    representativeEntry.weather?.[0]?.description,
+    representativeEntry.wind?.speed
+  );
+  const timezoneOffset = forecastData.city?.timezone || 0;
+  const season = detectSeason(new Date((representativeEntry.dt + timezoneOffset) * 1000));
+  const locationName = forecastData.city?.name || "your area";
+  const conditionLabel =
+    representativeEntry.weather?.[0]?.description || representativeEntry.weather?.[0]?.main || weatherCategory;
+
+  elements.temperature.value = String(temperature);
+  elements.temperatureValue.textContent = `${temperature}°F`;
+  elements.weatherSelect.value = weatherCategory;
+  elements.season.value = season;
+  elements.weatherStatus.textContent = `Using forecast weather for ${locationName} on ${formatDisplayDate(selectedDate)}:\nHigh of ${highTemperature}°F and Low of ${lowTemperature}°F and ${formatWeatherSummary(conditionLabel)}.`;
+  generateRecommendation(getPlannerState());
+}
+
+function isSameForecastDay(unixSeconds, selectedDate) {
+  const entryDate = new Date(unixSeconds * 1000);
+  return (
+    entryDate.getFullYear() === selectedDate.getFullYear() &&
+    entryDate.getMonth() === selectedDate.getMonth() &&
+    entryDate.getDate() === selectedDate.getDate()
+  );
+}
+
+function selectRepresentativeForecastEntry(dayEntries) {
+  let bestEntry = dayEntries[0];
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  dayEntries.forEach((entry) => {
+    const entryDate = new Date(entry.dt * 1000);
+    const distance = Math.abs(entryDate.getHours() - 12);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestEntry = entry;
+    }
+  });
+
+  return bestEntry;
+}
+
+function mapWeatherCondition(mainCondition = "", description = "", windSpeed = 0) {
   const main = mainCondition.toLowerCase();
   const details = description.toLowerCase();
 
   if (main.includes("snow")) return "snowy";
   if (main.includes("rain") || main.includes("drizzle") || main.includes("thunderstorm")) return "rainy";
+  if (windSpeed >= 15) return "windy";
   if (main.includes("cloud")) return "cloudy";
   if (main.includes("clear")) return "sunny";
   if (details.includes("wind") || main.includes("squall") || main.includes("tornado")) return "windy";
-  return "sunny";
+  return "cloudy";
 }
 
 function buildWeatherErrorMessage(error) {
@@ -401,7 +588,19 @@ function buildWeatherErrorMessage(error) {
   }
 
   if (error?.code === 3) {
-    return "Location lookup timed out, so QuickFit is using manual defaults until you try again.";
+    return "Location lookup timed out before the browser returned coordinates, so QuickFit is using manual defaults until you try again.";
+  }
+
+  if (error?.status === 401) {
+    return "OpenWeather rejected the API key. Double-check that the key is active and copied correctly.";
+  }
+
+  if (error?.status === 429) {
+    return "OpenWeather rate-limited the request, so QuickFit is using manual defaults for now.";
+  }
+
+  if (error?.forecastUnavailable) {
+    return "OpenWeather forecast data is only available for the next 5 days in this app, so QuickFit could not fill weather for that date.";
   }
 
   return "QuickFit could not load current weather right now, so the planner is using manual defaults.";
@@ -412,6 +611,35 @@ function formatWeatherSummary(summary) {
     .split(" ")
     .map((word) => capitalize(word))
     .join(" ");
+}
+
+function parseSelectedDate() {
+  if (!elements.outfitDate.value) return new Date();
+  return new Date(`${elements.outfitDate.value}T12:00:00`);
+}
+
+function isToday(date) {
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
+}
+
+function formatDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(date) {
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function populateTypeOptions() {
