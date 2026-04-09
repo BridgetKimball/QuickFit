@@ -215,8 +215,7 @@
             <div class="insight-card">
               <h3>Why this fit works</h3>
               <p id="recommendation-rationale">
-                QuickFit will explain how the weather and your style tags shaped
-                the outfit once your closet has a few pieces.
+                No outfit to explain yet. Add clothing to your closet to generate a recommendation.
               </p>
             </div>
           </article>
@@ -241,13 +240,24 @@
               </label>
 
               <div class="form-row">
+                <div class="field-stack">
+                  <label>
+                    Color
+                    <select name="color" id="color" required></select>
+                  </label>
+                  <label id="custom-color-field" class="conditional-field is-hidden">
+                    Custom color
+                    <input
+                      type="text"
+                      name="customColor"
+                      id="customColor"
+                      placeholder="Describe the color"
+                    >
+                  </label>
+                </div>
                 <label>
-                  Color
-                  <select name="color" id="color" required></select>
-                </label>
-                <label>
-                  Material
-                  <input type="text" name="material" placeholder="Optional">
+                  Pattern
+                  <input type="text" name="pattern" placeholder="Optional">
                 </label>
               </div>
 
@@ -263,15 +273,6 @@
               </div>
 
               <div class="form-row form-row--conditional">
-                <label id="custom-color-field" class="conditional-field is-hidden">
-                  Custom color
-                  <input
-                    type="text"
-                    name="customColor"
-                    id="customColor"
-                    placeholder="Describe the color"
-                  >
-                </label>
                 <label id="jewelry-field" class="conditional-field is-hidden">
                   Jewelry type
                   <select name="jewelryType" id="jewelryType">
@@ -304,6 +305,11 @@
                   </select>
                 </label>
               </div>
+
+              <label>
+                Material
+                <input type="text" name="material" placeholder="Optional">
+              </label>
 
               <button class="button button--primary" type="submit">
                 Save to Closet

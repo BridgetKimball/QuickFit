@@ -74,24 +74,6 @@ QuickFit uses a deployment-time weather config so the OpenWeather key stays out 
 
 This repo is set up for GitHub Pages via GitHub Actions.
 
-### Set the secret in GitHub
-
-Add this repository secret in GitHub Settings:
-
-- `OPENWEATHER_API_KEY=<your-real-key>`
-
-### How it works
-
-1. GitHub Actions writes `src/scripts/runtime-config.js` during the Pages build.
-2. The browser loads that generated file before `script.js`.
-3. QuickFit uses the injected key to fetch weather and compute selected-date highs and lows.
-
-This keeps the key out of the Git repository while still letting every user share the same weather key.
-
-### Optional serverless path
-
-The repo also includes `api/weather.js` if you later move to a host that supports serverless functions.
-
 ---
 
 ## App Pages

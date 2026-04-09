@@ -10,94 +10,45 @@ const OPENWEATHER_CURRENT_URL = "https://api.openweathermap.org/data/2.5/weather
 const OPENWEATHER_FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast";
 
 const clothingStyles = {
-  Jackets: [
-    "Leather jacket",
-    "Denim jacket",
-    "Bomber jacket",
-    "Motorcycle jacket",
-    "Vest",
-    "Blazer",
-    "Fleece jacket",
-    "Shirt jacket",
-    "Chore jacket",
-    "Varsity jacket",
-    "Windbreaker",
-    "Puffer jacket",
-    "Parka",
-    "Peacoat",
-    "Tuxedo jacket",
-    "Quilted jacket",
-    "Overcoat",
-    "Trench coat",
-  ],
-  Pants: [
-    "Hot pants",
-    "Straight",
-    "Skinny",
-    "Boot-cut",
-    "Flare",
-    "Wide leg",
-    "Pegged",
-    "Harem",
-    "Carpenter / overall",
-    "Sweat pants",
-    "Stirrup",
-    "5-pocket jeans",
-    "Bush pants",
-    "Cargo pants",
-    "Sailor pants",
-    "Jodhpurs",
-    "Palazzo",
-    "Jumpsuit",
-  ],
   Shirts: [
-    "Tube top",
-    "Sports bra",
-    "Tank top",
-    "Sleeveless shirt",
-    "V-neck shirt",
     "T-shirt",
     "Blouse",
-    "Shirt",
-    "Western shirt",
-    "Smock",
-    "Peplum",
-    "Gypsy",
-    "Tunic",
     "Polo",
     "Turtleneck",
+    "Tank top",
+    "Sleeveless shirt",
+    "Tube top",
+    "Sports bra",
   ],
   Shorts: [
     "Denim",
     "Boyfriend",
     "Cargo",
     "Skort",
-    "Bloomer",
     "Pleat",
-    "Culottes",
-    "Boxer",
-    "Bermuda",
     "Knee",
-    "Bike",
-    "Pedal",
     "Gym",
   ],
+  Pants: [
+    "Straight",
+    "Skinny",
+    "Boot-cut",
+    "Flare",
+    "Wide leg",
+    "Sweat pants",
+    "Cargo pants",
+    "Palazzo",
+    "Overalls",
+    "Jumpsuit",
+  ],
   Skirts: [
-    "Pencil",
     "A-Line",
-    "Waist Pleat",
-    "Hip Pleat",
-    "Godet",
-    "Tulip",
+    "Pencil",
     "Trumpet",
     "Sarong",
-    "Gypsy",
     "Tiered",
-    "Gore",
-    "Handkerchief",
     "Wrap",
     "Asymmetrical",
-    "Circle",
   ],
   Sweaters: [
     "Crewneck",
@@ -108,6 +59,22 @@ const clothingStyles = {
     "Cable knit",
     "Oversized",
     "Fair Isle",
+  ],
+  Jackets: [
+    "Leather jacket",
+    "Denim jacket",
+    "Vest",
+    "Blazer",
+    "Fleece jacket",
+    "Varsity jacket",
+    "Windbreaker",
+    "Puffer jacket",
+    "Parka",
+    "Peacoat",
+    "Tuxedo jacket",
+    "Quilted jacket",
+    "Overcoat",
+    "Trench coat",
   ],
   Accessories: ["Hat", "Sunglasses", "Scarf", "Jewelry"],
 };
@@ -127,7 +94,7 @@ const colorOptions = [
   "Black",
   "Grey",
   "White",
-  "Other",
+  "Multicolor",
 ];
 
 const typeGroups = {
@@ -155,10 +122,17 @@ const defaultProfile = {
 };
 
 const defaultCloset = [];
-const legacySeedItemNames = [
-  "Forest weekend tee",
-  "Cream straight trousers",
-  "Olive bomber layer",
+const legacySeedClosets = [
+  [
+    "Forest weekend tee",
+    "Cream straight trousers",
+    "Olive bomber layer",
+  ],
+  [
+    "Forest knit tee",
+    "Tailored cream trousers",
+    "Olive cropped jacket",
+  ],
 ];
 
 const state = {
@@ -772,7 +746,7 @@ function updateStyleOptions(type) {
 }
 
 function syncConditionalFields() {
-  const showCustomColor = elements.colorSelect.value === "Other";
+  const showCustomColor = elements.colorSelect.value === "Multicolor";
   const showJewelrySubtype =
     elements.typeSelect.value === "Accessories" && elements.styleSelect.value === "Jewelry";
 
@@ -787,7 +761,7 @@ function syncConditionalFields() {
 
 function buildClosetItem(formData) {
   const rawItem = Object.fromEntries(formData.entries());
-  const color = rawItem.color === "Other" ? rawItem.customColor.trim() : rawItem.color;
+  const color = rawItem.color === "Multicolor" ? rawItem.customColor.trim() || "Multicolor" : rawItem.color;
 
   if (!color) return null;
 
@@ -795,6 +769,7 @@ function buildClosetItem(formData) {
     name: rawItem.name.trim(),
     color,
     baseColor: rawItem.color,
+    pattern: rawItem.pattern.trim(),
     material: rawItem.material.trim(),
     type: rawItem.type,
     style: rawItem.style,
@@ -832,7 +807,7 @@ function renderCloset() {
   if (!filteredItems.length) {
     elements.closetList.innerHTML = `
       <div class="empty-state">
-        No items match this filter yet. Add a few pieces so QuickFit has more to work with.
+        Closet is empty, add a piece of clothing to get started.
       </div>
     `;
     return;
@@ -842,7 +817,8 @@ function renderCloset() {
 
   filteredItems.forEach((item) => {
     const materialLabel = item.material ? item.material : "Material not specified";
-    const detailLine = `${item.color} ${describeStyle(item).toLowerCase()}${item.material ? ` in ${item.material.toLowerCase()}` : ""}`;
+    const patternLabel = item.pattern ? `${item.pattern} ` : "";
+    const detailLine = `${item.color} ${patternLabel}${describeStyle(item).toLowerCase()}${item.material ? ` in ${item.material.toLowerCase()}` : ""}`;
     const card = document.createElement("article");
     card.className = "closet-card fade-in";
     card.innerHTML = `
@@ -866,6 +842,7 @@ function renderCloset() {
       <div class="closet-card__meta">
         <span class="tag">${item.type}</span>
         <span class="tag">${describeStyle(item)}</span>
+        ${item.pattern ? `<span class="tag">${item.pattern} pattern</span>` : ""}
         <span class="tag">${item.theme}</span>
         <span class="tag">${capitalize(item.warmth)} warmth</span>
         <span class="tag">${materialLabel}</span>
@@ -941,15 +918,13 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
   elements.weatherSummary.textContent = `${temperature}°F · ${capitalize(weather)} · ${season}`;
   elements.topRecommendation.textContent = topItem
     ? describeItem(topItem)
-    : "No top selected yet. Add shirts or sweaters to your closet.";
+    : "Closet is empty, add a piece of clothing to get started.";
   elements.bottomRecommendation.textContent = bottomItem
     ? describeItem(bottomItem)
-    : "No bottom selected yet. Add pants, shorts, or skirts to your closet.";
+    : "Once you add clothes, QuickFit will suggest bottoms here.";
   elements.layerRecommendation.textContent = layerItem
     ? describeItem(layerItem)
-    : effectiveTemperature < 60 || weather === "rainy"
-      ? "No extra layer selected yet. A jacket, scarf, or weather-ready accessory could help."
-      : "No extra layer selected. Accessories can be added once your closet is set up.";
+    : "Layers and accessories will appear here after you build your closet.";
 
   state.currentRecommendation = {
     planner: { temperature, weather, season, theme, stylePreference, outfitDate: elements.outfitDate.value },
@@ -1158,6 +1133,10 @@ function buildRationale({
   bottomItem,
   layerItem,
 }) {
+  if (!topItem && !bottomItem && !layerItem) {
+    return "No outfit to explain yet. Add clothing to your closet to generate a recommendation.";
+  }
+
   const biasMessage = effectiveTemperature !== temperature
     ? `Your profile adjusts ${temperature}°F to feel more like ${effectiveTemperature}°F. `
     : "";
@@ -1213,9 +1192,10 @@ function loadCollection(key, fallback) {
 
 function normalizeInitialCloset(closet) {
   const itemNames = closet.map((item) => item.name).sort();
-  const isLegacySeedCloset =
-    closet.length === legacySeedItemNames.length &&
-    legacySeedItemNames.every((name) => itemNames.includes(name));
+  const isLegacySeedCloset = legacySeedClosets.some((seedCloset) => (
+    closet.length === seedCloset.length &&
+    seedCloset.every((name) => itemNames.includes(name))
+  ));
 
   if (!isLegacySeedCloset) {
     return closet;
@@ -1262,7 +1242,8 @@ function persistObject(key, value) {
 
 function describeItem(item) {
   const materialNote = item.material ? ` in ${item.material.toLowerCase()}` : "";
-  return `${item.name} in ${item.color}, tagged ${item.theme.toLowerCase()} with a ${describeStyle(item).toLowerCase()} silhouette${materialNote}.`;
+  const patternNote = item.pattern ? ` with a ${item.pattern.toLowerCase()} pattern` : "";
+  return `${item.name} in ${item.color}${patternNote}, tagged ${item.theme.toLowerCase()} with a ${describeStyle(item).toLowerCase()} silhouette${materialNote}.`;
 }
 
 function describeStyle(item) {
