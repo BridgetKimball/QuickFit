@@ -183,9 +183,21 @@
                   <div class="mannequin__garment mannequin__garment--top" id="mannequin-top"></div>
                   <div class="mannequin__garment mannequin__garment--bottom" id="mannequin-bottom"></div>
                   <div class="mannequin__garment mannequin__garment--layer" id="mannequin-layer"></div>
+                  <div class="mannequin__garment mannequin__garment--shoes" id="mannequin-shoes"></div>
                 </div>
                 <div class="mannequin__base"></div>
               </div>
+
+              <div class="mannequin-actions">
+                <button class="button button--ghost button--small" id="toggle-tuck" type="button">
+                  Tuck In
+                </button>
+                <button class="button button--ghost button--small" id="toggle-jacket" type="button">
+                  Close Jacket
+                </button>
+              </div>
+
+              <p></p>
 
               <div class="recommendation-list">
                 <div>
@@ -199,6 +211,10 @@
                 <div>
                   <span class="recommendation-label">Layer and extras</span>
                   <p id="layer-recommendation">Outer layers and accessories will show up here.</p>
+                </div>
+                <div>
+                  <span class="recommendation-label">Shoes</span>
+                  <p id="shoes-recommendation">Shoes will show up here once they are in your closet.</p>
                 </div>
               </div>
 
@@ -229,16 +245,6 @@
             </div>
 
             <form id="closet-form" class="closet-form">
-              <label>
-                Item name
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="Olive cotton button-up"
-                  required
-                >
-              </label>
-
               <div class="form-row">
                 <div class="field-stack">
                   <label>
@@ -273,6 +279,16 @@
               </div>
 
               <div class="form-row form-row--conditional">
+                <label id="skirt-length-field" class="conditional-field is-hidden">
+                  Skirt length
+                  <select name="skirtLength" id="skirtLength">
+                    <option value="">Select skirt length</option>
+                    <option value="Mini">Mini length</option>
+                    <option value="Knee">Knee length</option>
+                    <option value="Midi">Midi length</option>
+                    <option value="Floor">Floor length</option>
+                  </select>
+                </label>
                 <label id="jewelry-field" class="conditional-field is-hidden">
                   Jewelry type
                   <select name="jewelryType" id="jewelryType">
@@ -281,6 +297,17 @@
                     <option value="Earrings">Earrings</option>
                     <option value="Bracelets">Bracelets</option>
                     <option value="Rings">Rings</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="form-row form-row--conditional">
+                <label id="sleeve-length-field" class="conditional-field is-hidden">
+                  Sleeve length
+                  <select name="sleeveLength" id="sleeveLength">
+                    <option value="">Select sleeve length</option>
+                    <option value="Short sleeve">Short sleeve</option>
+                    <option value="Long sleeve">Long sleeve</option>
                   </select>
                 </label>
               </div>

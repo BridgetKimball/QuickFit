@@ -343,30 +343,29 @@ select:focus {
   top: 0;
   opacity: 0;
   transition: opacity 180ms ease, background 180ms ease, clip-path 180ms ease;
-  mix-blend-mode: multiply;
-  mask-image: var(--mannequin-mask);
-  mask-repeat: no-repeat;
-  mask-position: center;
-  mask-size: contain;
-  -webkit-mask-image: var(--mannequin-mask);
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  -webkit-mask-size: contain;
+  pointer-events: none;
 }
 
 .mannequin__garment--top {
-  background: #4ea35f;
-  clip-path: inset(16% 20% 42% 20%);
+  z-index: 2;
 }
 
 .mannequin__garment--bottom {
-  background: #dbe8d7;
-  clip-path: inset(52% 24% 10% 24%);
+  z-index: 1;
 }
 
 .mannequin__garment--layer {
-  background: #083910;
-  clip-path: inset(12% 12% 34% 12%);
+  z-index: 3;
+}
+
+.mannequin__garment--shoes {
+  z-index: 0;
+}
+
+.mannequin__garment svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 .mannequin__base {
@@ -405,6 +404,13 @@ select:focus {
 .favorite-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.mannequin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .recommendation-label {

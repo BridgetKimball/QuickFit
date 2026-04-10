@@ -13,12 +13,10 @@ const clothingStyles = {
   Shirts: [
     "T-shirt",
     "Blouse",
-    "Polo",
     "Turtleneck",
+    "Button Up",
     "Tank top",
-    "Sleeveless shirt",
     "Tube top",
-    "Sports bra",
   ],
   Shorts: [
     "Denim",
@@ -35,7 +33,7 @@ const clothingStyles = {
     "Boot-cut",
     "Flare",
     "Wide leg",
-    "Sweat pants",
+    "Sweatpants",
     "Cargo pants",
     "Palazzo",
     "Overalls",
@@ -76,6 +74,22 @@ const clothingStyles = {
     "Overcoat",
     "Trench coat",
   ],
+  Shoes: [
+    "Running shoes",
+    "Basketball shoes",
+    "Tennis shoes",
+    "Canvas shoes",
+    "Loafers",
+    "Oxfords",
+    "Ballet flats",
+    "Kitten heels",
+    "Stilettos",
+    "Wedges",
+    "Platform heels",
+    "Flip-flops",
+    "Slides",
+    "Gladiator sandals",
+  ],
   Accessories: ["Hat", "Sunglasses", "Scarf", "Jewelry"],
 };
 
@@ -101,6 +115,7 @@ const typeGroups = {
   top: ["Shirts", "Sweaters"],
   bottom: ["Skirts", "Shorts", "Pants"],
   layer: ["Jackets", "Accessories"],
+  shoes: ["Shoes"],
 };
 
 const seasonOptions = ["Spring", "Summer", "Fall", "Winter"];
@@ -141,6 +156,10 @@ const state = {
   weatherLocation: null,
   favoriteOutfits: loadCollection(STORAGE_KEYS.favoriteOutfits, []),
   currentRecommendation: null,
+  mannequinControls: {
+    tuckedIn: false,
+    jacketClosed: false,
+  },
 };
 
 const mannequinSources = {
@@ -166,6 +185,7 @@ const elements = {
   mannequinTop: document.querySelector("#mannequin-top"),
   mannequinBottom: document.querySelector("#mannequin-bottom"),
   mannequinLayer: document.querySelector("#mannequin-layer"),
+  mannequinShoes: document.querySelector("#mannequin-shoes"),
   mannequinSilhouette: document.querySelector("#mannequin-silhouette"),
   mannequinShell: document.querySelector(".mannequin__silhouette-shell"),
   closetForm: document.querySelector("#closet-form"),
@@ -174,6 +194,10 @@ const elements = {
   closetFavoriteFilter: document.querySelector("#closet-favorite-filter"),
   typeSelect: document.querySelector("#type"),
   styleSelect: document.querySelector("#style"),
+  skirtLengthField: document.querySelector("#skirt-length-field"),
+  skirtLengthSelect: document.querySelector("#skirtLength"),
+  sleeveLengthField: document.querySelector("#sleeve-length-field"),
+  sleeveLengthSelect: document.querySelector("#sleeveLength"),
   colorSelect: document.querySelector("#color"),
   customColorField: document.querySelector("#custom-color-field"),
   customColorInput: document.querySelector("#customColor"),
@@ -183,9 +207,12 @@ const elements = {
   weatherStatus: document.querySelector("#weather-status"),
   refreshWeatherButton: document.querySelector("#refresh-weather"),
   favoriteOutfitButton: document.querySelector("#favorite-outfit"),
+  toggleTuckButton: document.querySelector("#toggle-tuck"),
+  toggleJacketButton: document.querySelector("#toggle-jacket"),
   profileForm: document.querySelector("#profile-form"),
   profileSummary: document.querySelector("#profile-summary"),
   profileStyleSelect: document.querySelector("#profileStyle"),
+  shoesRecommendation: document.querySelector("#shoes-recommendation"),
   resetProfileButton: document.querySelector("#reset-profile"),
   savedOutfitsList: document.querySelector("#saved-outfits-list"),
 };
@@ -277,6 +304,14 @@ function bindEvents() {
 
   elements.styleSelect.addEventListener("change", syncConditionalFields);
   elements.colorSelect.addEventListener("change", syncConditionalFields);
+  elements.toggleTuckButton.addEventListener("click", () => {
+    state.mannequinControls.tuckedIn = !state.mannequinControls.tuckedIn;
+    generateRecommendation(getPlannerState());
+  });
+  elements.toggleJacketButton.addEventListener("click", () => {
+    state.mannequinControls.jacketClosed = !state.mannequinControls.jacketClosed;
+    generateRecommendation(getPlannerState());
+  });
 
   elements.closetForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -749,6 +784,10 @@ function syncConditionalFields() {
   const showCustomColor = elements.colorSelect.value === "Multicolor";
   const showJewelrySubtype =
     elements.typeSelect.value === "Accessories" && elements.styleSelect.value === "Jewelry";
+  const showSkirtLength = elements.typeSelect.value === "Skirts";
+  const sleevelessShirtStyles = new Set(["Tank top", "Sleeveless shirt", "Sports bra", "Tube top"]);
+  const showSleeveLength =
+    elements.typeSelect.value === "Shirts" && !sleevelessShirtStyles.has(elements.styleSelect.value);
 
   elements.customColorField.classList.toggle("is-hidden", !showCustomColor);
   elements.customColorInput.required = showCustomColor;
@@ -757,6 +796,14 @@ function syncConditionalFields() {
   elements.jewelryField.classList.toggle("is-hidden", !showJewelrySubtype);
   elements.jewelryTypeSelect.required = showJewelrySubtype;
   if (!showJewelrySubtype) elements.jewelryTypeSelect.value = "";
+
+  elements.skirtLengthField.classList.toggle("is-hidden", !showSkirtLength);
+  elements.skirtLengthSelect.required = showSkirtLength;
+  if (!showSkirtLength) elements.skirtLengthSelect.value = "";
+
+  elements.sleeveLengthField.classList.toggle("is-hidden", !showSleeveLength);
+  elements.sleeveLengthSelect.required = showSleeveLength;
+  if (!showSleeveLength) elements.sleeveLengthSelect.value = "";
 }
 
 function buildClosetItem(formData) {
@@ -766,18 +813,33 @@ function buildClosetItem(formData) {
   if (!color) return null;
 
   return {
-    name: rawItem.name.trim(),
+    name: buildAutoItemName({
+      color,
+      style: rawItem.style,
+      jewelryType: rawItem.jewelryType || "",
+    }),
     color,
     baseColor: rawItem.color,
     pattern: rawItem.pattern.trim(),
     material: rawItem.material.trim(),
     type: rawItem.type,
     style: rawItem.style,
+    skirtLength: rawItem.skirtLength || "",
+    sleeveLength: rawItem.sleeveLength || "",
     jewelryType: rawItem.jewelryType || "",
     theme: rawItem.theme,
     warmth: rawItem.warmth,
     isFavorite: false,
   };
+}
+
+function buildAutoItemName({ color, style, jewelryType }) {
+  const styleLabel = jewelryType || style;
+  return `${color} ${styleLabel}`
+    .toLowerCase()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function populateClosetFilter() {
@@ -843,6 +905,8 @@ function renderCloset() {
         <span class="tag">${item.type}</span>
         <span class="tag">${describeStyle(item)}</span>
         ${item.pattern ? `<span class="tag">${item.pattern} pattern</span>` : ""}
+        ${item.skirtLength ? `<span class="tag">${item.skirtLength} length</span>` : ""}
+        ${item.sleeveLength ? `<span class="tag">${item.sleeveLength}</span>` : ""}
         <span class="tag">${item.theme}</span>
         <span class="tag">${capitalize(item.warmth)} warmth</span>
         <span class="tag">${materialLabel}</span>
@@ -914,6 +978,7 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
   const topItem = chooseItem("top", { effectiveTemperature, theme, stylePreference });
   const bottomItem = chooseItem("bottom", { effectiveTemperature, theme, stylePreference });
   const layerItem = chooseItem("layer", { effectiveTemperature, theme, stylePreference, weather });
+  const shoesItem = chooseItem("shoes", { effectiveTemperature, theme, stylePreference, weather });
 
   elements.weatherSummary.textContent = `${temperature}°F · ${capitalize(weather)} · ${season}`;
   elements.topRecommendation.textContent = topItem
@@ -925,15 +990,21 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
   elements.layerRecommendation.textContent = layerItem
     ? describeItem(layerItem)
     : "Layers and accessories will appear here after you build your closet.";
+  elements.shoesRecommendation.textContent = shoesItem
+    ? describeItem(shoesItem)
+    : "Shoes will appear here after you add them to your closet.";
 
   state.currentRecommendation = {
     planner: { temperature, weather, season, theme, stylePreference, outfitDate: elements.outfitDate.value },
     topItemId: topItem?.id || null,
     bottomItemId: bottomItem?.id || null,
     layerItemId: layerItem?.id || null,
+    shoesItemId: shoesItem?.id || null,
+    tuckedIn: state.mannequinControls.tuckedIn,
+    jacketClosed: state.mannequinControls.jacketClosed,
   };
 
-  applyMannequinStyles(topItem, bottomItem, layerItem, effectiveTemperature);
+  applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effectiveTemperature);
   syncFavoriteOutfitButton();
   elements.rationale.textContent = buildRationale({
     temperature,
@@ -945,12 +1016,13 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
     topItem,
     bottomItem,
     layerItem,
+    shoesItem,
   });
 }
 
 function toggleFavoriteCurrentOutfit() {
   const recommendation = state.currentRecommendation;
-  if (!recommendation || (!recommendation.topItemId && !recommendation.bottomItemId && !recommendation.layerItemId)) {
+  if (!recommendation || (!recommendation.topItemId && !recommendation.bottomItemId && !recommendation.layerItemId && !recommendation.shoesItemId)) {
     return;
   }
 
@@ -965,6 +1037,9 @@ function toggleFavoriteCurrentOutfit() {
       topItemId: recommendation.topItemId,
       bottomItemId: recommendation.bottomItemId,
       layerItemId: recommendation.layerItemId,
+      shoesItemId: recommendation.shoesItemId,
+      tuckedIn: recommendation.tuckedIn,
+      jacketClosed: recommendation.jacketClosed,
       createdAt: new Date().toISOString(),
     });
   }
@@ -987,11 +1062,14 @@ function syncFavoriteOutfitButton() {
 
 function isSameSavedOutfit(savedOutfit, recommendation) {
   return (
-    savedOutfit.topItemId === recommendation.topItemId &&
-    savedOutfit.bottomItemId === recommendation.bottomItemId &&
-    savedOutfit.layerItemId === recommendation.layerItemId &&
-    savedOutfit.planner.theme === recommendation.planner.theme &&
-    savedOutfit.planner.stylePreference === recommendation.planner.stylePreference
+      savedOutfit.topItemId === recommendation.topItemId &&
+      savedOutfit.bottomItemId === recommendation.bottomItemId &&
+      savedOutfit.layerItemId === recommendation.layerItemId &&
+      savedOutfit.shoesItemId === recommendation.shoesItemId &&
+      savedOutfit.planner.theme === recommendation.planner.theme &&
+      savedOutfit.planner.stylePreference === recommendation.planner.stylePreference &&
+      Boolean(savedOutfit.tuckedIn) === Boolean(recommendation.tuckedIn) &&
+      Boolean(savedOutfit.jacketClosed) === Boolean(recommendation.jacketClosed)
   );
 }
 
@@ -1013,7 +1091,8 @@ function renderSavedOutfits() {
     const topItem = findClosetItem(outfit.topItemId);
     const bottomItem = findClosetItem(outfit.bottomItemId);
     const layerItem = findClosetItem(outfit.layerItemId);
-    const itemLabels = [topItem?.name, bottomItem?.name, layerItem?.name].filter(Boolean).join(" · ");
+    const shoesItem = findClosetItem(outfit.shoesItemId);
+    const itemLabels = [topItem?.name, bottomItem?.name, layerItem?.name, shoesItem?.name].filter(Boolean).join(" · ");
 
     card.innerHTML = `
       <strong>${outfit.planner.theme} · ${outfit.planner.stylePreference}</strong>
@@ -1050,6 +1129,8 @@ function loadSavedOutfit(outfitId) {
   elements.season.value = savedOutfit.planner.season;
   document.querySelector("#theme").value = savedOutfit.planner.theme;
   elements.stylePreferenceSelect.value = savedOutfit.planner.stylePreference;
+  state.mannequinControls.tuckedIn = Boolean(savedOutfit.tuckedIn);
+  state.mannequinControls.jacketClosed = Boolean(savedOutfit.jacketClosed);
   generateRecommendation(savedOutfit.planner);
   setActiveSection("planner");
 }
@@ -1075,6 +1156,12 @@ function chooseItem(group, context) {
 }
 
 function desiredWarmth(temperature, group, weather) {
+  if (group === "shoes") {
+    if (weather === "rainy" || weather === "snowy") return "heavy";
+    if (temperature <= 55) return "medium";
+    return "light";
+  }
+
   if (group === "layer") {
     if (temperature <= 50 || weather === "rainy" || weather === "snowy") return "heavy";
     if (temperature <= 68 || weather === "windy") return "medium";
@@ -1086,40 +1173,363 @@ function desiredWarmth(temperature, group, weather) {
   return "light";
 }
 
-function applyMannequinStyles(topItem, bottomItem, layerItem, effectiveTemperature) {
-  elements.mannequinTop.style.background = colorForItem(topItem?.color, "#4ea35f");
-  elements.mannequinBottom.style.background = colorForItem(bottomItem?.color, "#dbe8d7");
-  elements.mannequinLayer.style.background = colorForItem(layerItem?.color, "#083910");
+function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effectiveTemperature) {
+  setMannequinGarment(
+    elements.mannequinTop,
+    renderTopSvg(topItem, state.mannequinControls, state.profile.presentation),
+  );
+  setMannequinGarment(elements.mannequinBottom, renderBottomSvg(bottomItem, state.mannequinControls, effectiveTemperature));
+  setMannequinGarment(elements.mannequinLayer, renderLayerSvg(layerItem, state.mannequinControls));
+  setMannequinGarment(elements.mannequinShoes, renderShoesSvg(shoesItem));
+  syncMannequinButtons(topItem, layerItem);
+}
 
-  if (topItem) {
-    const topClip = topItem.type === "Sweaters"
-      ? "inset(14% 18% 34% 18%)"
-      : "inset(16% 20% 42% 20%)";
-    elements.mannequinTop.style.clipPath = topClip;
-    elements.mannequinTop.style.opacity = "0.92";
-  } else {
-    elements.mannequinTop.style.opacity = "0";
+function setMannequinGarment(element, svgMarkup) {
+  element.innerHTML = svgMarkup || "";
+  element.style.opacity = svgMarkup ? "1" : "0";
+}
+
+function syncMannequinButtons(topItem, layerItem) {
+  const tuckable = Boolean(topItem) && !["Sports bra", "Tube top"].includes(topItem.style);
+  elements.toggleTuckButton.disabled = !tuckable;
+  elements.toggleTuckButton.textContent = state.mannequinControls.tuckedIn ? "Untuck Shirt" : "Tuck In";
+  elements.toggleTuckButton.setAttribute("aria-pressed", state.mannequinControls.tuckedIn ? "true" : "false");
+
+  const jacketPresent = Boolean(layerItem) && layerItem.type === "Jackets";
+  elements.toggleJacketButton.disabled = !jacketPresent;
+  elements.toggleJacketButton.textContent = state.mannequinControls.jacketClosed ? "Open Jacket" : "Close Jacket";
+  elements.toggleJacketButton.setAttribute("aria-pressed", state.mannequinControls.jacketClosed ? "true" : "false");
+}
+
+function renderTopSvg(item, controls, presentation = "Unspecified") {
+  if (!item) return "";
+
+  const fill = colorForItem(item.color, "#7fb28a");
+  const stroke = accentColor(fill);
+  const tucked = controls.tuckedIn;
+  const silhouette = resolveTopSilhouette(item);
+  const feminine = presentation === "Feminine";
+  const isButtonUp = item.style === "Button Up";
+  const hemMap = {
+    "short-sleeve": tucked ? 165 : (feminine ? 180 : 180),
+    "long-sleeve": tucked ? 160 : (feminine ? 180 : 180),
+    "short-sleeve-turtleneck": tucked ? 202 : (feminine ? 200 : 212),
+    "long-sleeve-turtleneck": tucked ? 202 : (feminine ? 198 : 210),
+    "tube-top": 176,
+    "tank-top": feminine ? 184 : 190,
+  };
+  const hemY = hemMap[silhouette];
+  const masculineUntuckedShortSleeve = !feminine && !tucked && silhouette === "short-sleeve";
+
+  if (silhouette === "tube-top") {
+    return `<svg viewBox="0 0 176 420" aria-hidden="true">
+      <rect
+        x="${feminine ? 58 : 54}"
+        y="108"
+        width="${feminine ? 60 : 68}"
+        height="${hemY - 108}"
+        rx="6"
+        fill="${fill}"
+        stroke="${stroke}"
+        stroke-width="2"
+      />
+    </svg>`;
   }
 
-  if (bottomItem) {
-    const bottomClip = effectiveTemperature > 75
-      ? "inset(58% 24% 24% 24%)"
-      : "inset(52% 24% 10% 24%)";
-    elements.mannequinBottom.style.clipPath = bottomClip;
-    elements.mannequinBottom.style.opacity = "0.9";
-  } else {
-    elements.mannequinBottom.style.opacity = "0";
+  if (silhouette === "tank-top") {
+    return `<svg viewBox="0 0 176 420" aria-hidden="true">
+      <rect
+        x="${feminine ? 58 : 54}"
+        y="112"
+        width="${feminine ? 60 : 68}"
+        height="${hemY - 112}"
+        rx="6"
+        fill="${fill}"
+        stroke="${stroke}"
+        stroke-width="2"
+      />
+      <rect
+        x="${feminine ? 62 : 60}"
+        y="${feminine ? 88 : 84}"
+        width="${feminine ? 8 : 9}"
+        height="${feminine ? 28 : 32}"
+        rx="4"
+        fill="${fill}"
+        stroke="${stroke}"
+        stroke-width="2"
+      />
+      <rect
+        x="${feminine ? 106 : 107}"
+        y="${feminine ? 88 : 84}"
+        width="${feminine ? 8 : 9}"
+        height="${feminine ? 28 : 32}"
+        rx="4"
+        fill="${fill}"
+        stroke="${stroke}"
+        stroke-width="2"
+      />
+    </svg>`;
   }
 
-  if (layerItem && layerItem.type === "Jackets") {
-    const layerClip = effectiveTemperature < 60
-      ? "inset(12% 12% 30% 12%)"
-      : "inset(14% 14% 38% 14%)";
-    elements.mannequinLayer.style.clipPath = layerClip;
-    elements.mannequinLayer.style.opacity = "0.82";
+  const feminineTuckedShortSleeve = feminine && tucked && silhouette === "short-sleeve";
+  const body = feminine
+    ? (feminineTuckedShortSleeve
+      ? `<path d="M51 86 C61 74, 76 74, 88 86 C100 74, 115 74, 125 86 L115 ${hemY} C105 ${hemY + 2}, 71 ${hemY + 2}, 61 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+      : `<path d="M51 86 C61 74, 76 74, 88 86 C100 74, 115 74, 125 86 L117 ${hemY} C107 ${hemY + 2}, 69 ${hemY + 2}, 59 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`)
+    : (masculineUntuckedShortSleeve
+      ? `<path d="M50 92 L66 80 L76 80 L76 84 L82 92 L94 92 L100 84 L100 80 L110 80 L126 92 L120 ${hemY + 12} C108 ${hemY + 14}, 68 ${hemY + 14}, 56 ${hemY + 12} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+      : `<path d="M54 92 L68 80 L78 80 L78 84 L83 92 L93 92 L98 84 L98 80 L108 80 L122 92 L116 ${hemY} C106 ${hemY + 2}, 70 ${hemY + 2}, 60 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`);
+  let sleeves = "";
+  let collar = "";
+  let trim = "";
+
+  if (silhouette === "short-sleeve" || silhouette === "short-sleeve-turtleneck") {
+    sleeves = `
+      <path d="M${feminine ? 55 : 58} 80 L${feminine ? 35 : 35} 90 L${feminine ? 31 : 30} 132 L${feminine ? 57 : 60} 134 L${feminine ? 67 : 68} 95 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M${feminine ? 121 : 118} 80 L${feminine ? 141 : 140} 90 L${feminine ? 145 : 145} 132 L${feminine ? 119 : 116} 134 L${feminine ? 109 : 108} 95 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    `;
   } else {
-    elements.mannequinLayer.style.opacity = "0";
+    const shoulderY = feminine ? 84 : 83;
+    const leftOuterShoulderX = feminine ? 41 : 34;
+    const leftInnerShoulderX = feminine ? 60 : 68;
+    const leftOuterCuffX = feminine ? 29 : 22;
+    const leftInnerCuffX = feminine ? 48 : 44;
+    const rightOuterShoulderX = feminine ? 135 : 142;
+    const rightInnerShoulderX = feminine ? 116 : 108;
+    const rightOuterCuffX = feminine ? 147 : 154;
+    const rightInnerCuffX = feminine ? 128 : 132;
+    const cuffY = feminine ? 210 : 216;
+    const elbowY = feminine ? 146 : 154;
+    sleeves = `
+      <path d="M58 88 Q51 80 ${leftOuterShoulderX} ${shoulderY} L${leftOuterCuffX} ${cuffY} L${leftInnerCuffX} ${cuffY} L${leftInnerShoulderX} ${elbowY} Q64 100 58 88 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M118 88 Q125 80 ${rightOuterShoulderX} ${shoulderY} L${rightOuterCuffX} ${cuffY} L${rightInnerCuffX} ${cuffY} L${rightInnerShoulderX} ${elbowY} Q112 100 118 88 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    `;
   }
+
+  if (silhouette === "long-sleeve-turtleneck" || silhouette === "short-sleeve-turtleneck") {
+    collar = `<rect x="73" y="74" width="30" height="18" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  } else {
+    collar = feminine
+      ? `<path d="M75 86 Q88 104 101 86" fill="none" stroke="${stroke}" stroke-width="2"/>`
+      : `<path d="M76 82 L76 88 L82 94 L94 94 L100 88 L100 82" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+
+  if (!feminine && !silhouette.includes("turtleneck")) {
+    collar = `<path d="M74 82 L76 88 L82 92 L94 92 L100 88 L102 82" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+
+  if (isButtonUp) {
+    trim = `
+      <path d="M88 84 L88 ${hemY}" stroke="${stroke}" stroke-width="2"/>
+      <circle cx="88" cy="102" r="2.25" fill="${stroke}"/>
+      <circle cx="88" cy="118" r="2.25" fill="${stroke}"/>
+      <circle cx="88" cy="134" r="2.25" fill="${stroke}"/>
+      <circle cx="88" cy="150" r="2.25" fill="${stroke}"/>
+    `;
+  }
+
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleeves}${body}${collar}${trim}</svg>`;
+}
+
+function resolveTopSilhouette(item) {
+  if (item.style === "Tube top") return "tube-top";
+  if (item.style === "Tank top" || item.style === "Sleeveless shirt" || item.style === "Sports bra") {
+    return "tank-top";
+  }
+
+  const shirtDefaultSleeve = item.style === "Blouse" || item.style === "Button Up" ? "Long sleeve" : "Short sleeve";
+  const sleeveLength = item.sleeveLength || shirtDefaultSleeve;
+  const isTurtleneck = item.style === "Turtleneck";
+  const isLongSleeve = item.type === "Sweaters" || sleeveLength === "Long sleeve";
+
+  if (isTurtleneck) {
+    return isLongSleeve ? "long-sleeve-turtleneck" : "short-sleeve-turtleneck";
+  }
+
+  return isLongSleeve ? "long-sleeve" : "short-sleeve";
+}
+
+function renderBottomSvg(item, controls, effectiveTemperature) {
+  if (!item) return "";
+
+  const fill = colorForItem(item.color, "#b8d8c2");
+  const stroke = accentColor(fill);
+  const tucked = controls.tuckedIn;
+  const waistY = tucked ? 198 : 210;
+
+  if (item.type === "Skirts") {
+    return `<svg viewBox="0 0 176 420" aria-hidden="true">${buildSkirtSvg(item, fill, stroke, waistY)}</svg>`;
+  }
+
+  if (item.type === "Shorts") {
+    return `<svg viewBox="0 0 176 420" aria-hidden="true">${buildShortsSvg(item, fill, stroke, waistY)}</svg>`;
+  }
+
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${buildPantsSvg(item, fill, stroke, waistY, effectiveTemperature)}</svg>`;
+}
+
+function renderLayerSvg(item, controls) {
+  if (!item || item.type !== "Jackets") return "";
+
+  const fill = colorForItem(item.color, "#3b3f44");
+  const stroke = accentColor(fill);
+  const closed = controls.jacketClosed;
+  const longJacketStyles = new Set(["Parka", "Peacoat", "Overcoat", "Trench coat"]);
+  const sleevelessStyles = new Set(["Vest"]);
+  const isLeatherJacket = item.style === "Leather jacket";
+  const hemY = isLeatherJacket ? 222 : (longJacketStyles.has(item.style) ? 318 : 248);
+  const sleevePath = sleevelessStyles.has(item.style)
+    ? ""
+    : `
+      <path d="${isLeatherJacket
+        ? `M56 86 L40 106 L30 236 L42 236 L64 130 Z`
+        : `M57 86 L47 114 L52 ${Math.min(hemY + 24, 288)} L60 ${Math.min(hemY + 20, 284)} L67 138 Z`
+      }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="${isLeatherJacket
+        ? `M120 86 L136 106 L146 236 L134 236 L112 130 Z`
+        : `M119 86 L129 114 L124 ${Math.min(hemY + 24, 288)} L116 ${Math.min(hemY + 20, 284)} L109 138 Z`
+      }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    `;
+
+  let body = "";
+  if (closed) {
+    body = `<path d="M58 86 C64 76, 76 76, 88 90 C100 76, 112 76, 118 86 L120 ${hemY} C106 ${hemY + 6}, 70 ${hemY + 6}, 56 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  } else {
+    body = `
+      <path d="${isLeatherJacket
+        ? `M58 86 C63 78, 74 78, 84 98 L82 ${hemY} C72 ${hemY + 3}, 61 ${hemY + 2}, 56 ${hemY} Z`
+        : `M58 86 C63 78, 74 78, 82 98 L82 ${hemY} C72 ${hemY + 4}, 62 ${hemY + 3}, 56 ${hemY} Z`
+      }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="${isLeatherJacket
+        ? `M118 86 C113 78, 102 78, 92 98 L94 ${hemY} C104 ${hemY + 3}, 115 ${hemY + 2}, 120 ${hemY} Z`
+        : `M118 86 C113 78, 102 78, 94 98 L94 ${hemY} C104 ${hemY + 4}, 114 ${hemY + 3}, 120 ${hemY} Z`
+      }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    `;
+  }
+
+  const lapels = item.style === "Leather jacket" || item.style === "Tuxedo jacket" || item.style === "Blazer" || item.style === "Peacoat"
+    ? `<path d="M68 112 L84 138 L88 120 L92 138 L108 112" fill="none" stroke="${stroke}" stroke-width="3"/>`
+    : "";
+  const puffLines = item.style === "Puffer jacket" || item.style === "Quilted jacket"
+    ? Array.from({ length: 5 }, (_, index) => `<path d="M62 ${126 + index * 18} L114 ${126 + index * 18}" stroke="${stroke}" stroke-width="1.5"/>`).join("")
+    : "";
+  const belt = item.style === "Trench coat"
+    ? `<path d="M58 188 L118 188" stroke="${stroke}" stroke-width="3"/><path d="M88 182 L88 198" stroke="${stroke}" stroke-width="2"/>`
+    : "";
+
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleevePath}${body}${lapels}${puffLines}${belt}</svg>`;
+}
+
+function renderShoesSvg(item) {
+  if (!item) return "";
+
+  const fill = colorForItem(item.color, "#8a4a4a");
+  const stroke = accentColor(fill);
+  const left = `<ellipse cx="57" cy="399" rx="18" ry="12" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  const right = `<ellipse cx="118" cy="399" rx="18" ry="12" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${left}${right}</svg>`;
+}
+
+function buildSkirtSvg(item, fill, stroke, waistY) {
+  const lengthMap = {
+    Mini: 72,
+    Knee: 108,
+    Midi: 144,
+    Floor: 196,
+  };
+  const skirtLength = lengthMap[item.skirtLength || "Knee"];
+  const bottomY = waistY + skirtLength;
+
+  const stylePaths = {
+    "A-Line": `M58 ${waistY} L118 ${waistY} L128 ${bottomY} L48 ${bottomY} Z`,
+    Pencil: `M64 ${waistY} L112 ${waistY} L108 ${bottomY} L68 ${bottomY} Z`,
+    Trumpet: `M62 ${waistY} L114 ${waistY} L104 ${bottomY - 18} L124 ${bottomY} L52 ${bottomY} L72 ${bottomY - 18} Z`,
+    Sarong: `M58 ${waistY} L118 ${waistY} L103 ${bottomY} L57 ${bottomY} Z`,
+    Tiered: `M58 ${waistY} L118 ${waistY} L122 ${bottomY - 32} L114 ${bottomY - 18} L126 ${bottomY} L50 ${bottomY} L62 ${bottomY - 18} L54 ${bottomY - 32} Z`,
+    Wrap: `M58 ${waistY} L118 ${waistY} L100 ${bottomY} L56 ${bottomY} Z`,
+    Asymmetrical: `M58 ${waistY} L118 ${waistY} L106 ${bottomY - 28} L66 ${bottomY} Z`,
+  };
+
+  return `<path d="${stylePaths[item.style] || stylePaths["A-Line"]}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+}
+
+function buildShortsSvg(item, fill, stroke, waistY) {
+  const lengthMap = {
+    Denim: 56,
+    Boyfriend: 64,
+    Cargo: 74,
+    Skort: 64,
+    Pleat: 70,
+    Knee: 96,
+    Gym: 54,
+  };
+  const hemY = waistY + (lengthMap[item.style] || 64);
+  if (item.style === "Skort") {
+    return `<path d="M68 ${waistY} L108 ${waistY} L116 ${hemY} L60 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/><path d="M88 ${waistY} L84 ${hemY}" stroke="${stroke}" stroke-width="2"/>`;
+  }
+  const pockets = item.style === "Cargo"
+    ? `<rect x="62" y="${waistY + 24}" width="10" height="16" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/><rect x="104" y="${waistY + 24}" width="10" height="16" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+    : "";
+  return `
+    <path d="M68 ${waistY} L108 ${waistY} L103 ${hemY} L93 ${hemY} L88 ${hemY - 10} L83 ${hemY} L73 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    <path d="M88 ${waistY} L88 ${hemY - 10}" stroke="${stroke}" stroke-width="2"/>
+    ${pockets}
+  `;
+}
+
+function buildPantsSvg(item, fill, stroke, waistY, effectiveTemperature) {
+  const floorY = 372;
+  const style = item.style;
+  let leftHem = 56;
+  let rightHem = 120;
+  let leftUpper = 58;
+  let rightUpper = 118;
+
+  if (style === "Skinny") {
+    leftHem = 68;
+    rightHem = 108;
+  } else if (style === "Boot-cut") {
+    leftHem = 52;
+    rightHem = 124;
+  } else if (style === "Flare" || style === "Palazzo" || style === "Wide leg") {
+    leftHem = 44;
+    rightHem = 132;
+  }
+
+  const cuffs = style === "Sweatpants"
+    ? `<path d="M60 ${floorY} L78 ${floorY}" stroke="${stroke}" stroke-width="3"/><path d="M98 ${floorY} L116 ${floorY}" stroke="${stroke}" stroke-width="3"/>`
+    : "";
+  const pockets = style === "Cargo pants"
+    ? `<rect x="52" y="${waistY + 54}" width="14" height="22" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/><rect x="110" y="${waistY + 54}" width="14" height="22" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+    : "";
+  const straps = style === "Overalls"
+    ? `<path d="M66 ${waistY} L62 144 L78 144 L82 ${waistY}" stroke="${stroke}" stroke-width="4"/><path d="M110 ${waistY} L114 144 L98 144 L94 ${waistY}" stroke="${stroke}" stroke-width="4"/><rect x="66" y="${waistY + 16}" width="44" height="28" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+    : "";
+  const jumpsuitTop = style === "Jumpsuit"
+    ? `<path d="M48 94 C60 82, 76 82, 88 96 C100 82, 116 82, 128 94 L126 ${waistY + 8} C112 ${waistY + 14}, 64 ${waistY + 14}, 50 ${waistY + 8} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+    : "";
+
+  return `
+    ${jumpsuitTop}
+    <path d="M${leftUpper} ${waistY} L${rightUpper} ${waistY} L110 ${floorY} L96 ${floorY} L94 252 L82 252 L72 ${floorY} L${leftHem} ${floorY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    <path d="M${leftUpper} ${waistY} L78 ${waistY + 22} L${leftHem} ${floorY}" fill="none" stroke="${stroke}" stroke-width="2"/>
+    <path d="M${rightUpper} ${waistY} L98 ${waistY + 22} L${rightHem} ${floorY}" fill="none" stroke="${stroke}" stroke-width="2"/>
+    <path d="M88 ${waistY} L88 ${floorY - 28}" stroke="${stroke}" stroke-width="2"/>
+    ${cuffs}
+    ${pockets}
+    ${straps}
+  `;
+}
+
+function accentColor(hexColor) {
+  const normalized = hexColor.replace("#", "");
+  if (normalized.length !== 6) return "#2d3a31";
+  const numeric = parseInt(normalized, 16);
+  const red = Math.max(0, ((numeric >> 16) & 255) - 40);
+  const green = Math.max(0, ((numeric >> 8) & 255) - 40);
+  const blue = Math.max(0, (numeric & 255) - 40);
+  return `rgb(${red}, ${green}, ${blue})`;
 }
 
 function buildRationale({
@@ -1132,8 +1542,9 @@ function buildRationale({
   topItem,
   bottomItem,
   layerItem,
+  shoesItem,
 }) {
-  if (!topItem && !bottomItem && !layerItem) {
+  if (!topItem && !bottomItem && !layerItem && !shoesItem) {
     return "No outfit to explain yet. Add clothing to your closet to generate a recommendation.";
   }
 
@@ -1145,6 +1556,7 @@ function buildRationale({
     topItem ? `${topItem.name} handles the top layer.` : "You still need a saved top option.",
     bottomItem ? `${bottomItem.name} anchors the outfit.` : "A saved bottom will help complete the look.",
     layerItem ? `${layerItem.name} adds extra weather protection.` : "No extra layer was selected from your closet.",
+    shoesItem ? `${shoesItem.name} finishes the look.` : "Shoes can complete the outfit once they are in your closet.",
   ].join(" ");
 
   return `${biasMessage}${capitalize(weather)} ${season.toLowerCase()} weather and a ${theme.toLowerCase()} theme push this suggestion toward ${stylePreference.toLowerCase()} styling. ${outfitMessage}`;
@@ -1247,7 +1659,11 @@ function describeItem(item) {
 }
 
 function describeStyle(item) {
-  return item.jewelryType ? `${item.style} (${item.jewelryType})` : item.style;
+  const styleNotes = [item.style];
+  if (item.skirtLength) styleNotes.push(item.skirtLength);
+  if (item.sleeveLength) styleNotes.push(item.sleeveLength);
+  if (item.jewelryType) styleNotes.push(item.jewelryType);
+  return styleNotes.length > 1 ? `${styleNotes[0]} (${styleNotes.slice(1).join(", ")})` : styleNotes[0];
 }
 
 function colorForItem(colorName, fallback) {
