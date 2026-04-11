@@ -1,0 +1,25 @@
+Next Steps:
+- Test the displays of all types of clothing
+    - Skirt
+    - Shorts
+    - Jackets
+    - Sweaters
+    - Accessories
+        - Hat
+        - Scarf
+        - Sunglasses
+        - Jewelry: necklace: earrings, bracelet, rings
+    - Make varied shoes (right now there's only one type being displayed)
+- Test close jacket button (applies to certain sweaters too)
+- Add more to profile to help the stylist suggest more things that the user will be more inclined to wear
+    - Favorite color
+    - Favorite pattern
+- Edit the display for multicolor clothing: splice multicolor description for individual colors to display those individual colors
+- Make the clothes correspond better with weather (and factor in user's temperature preference: if user runs cold drop the degrees below down by 10 degrees but if the user runs hot then bump the degrees below up by 10 degrees, the degrees below are for balanced temperatures in people):
+    - If user adds a short sleeve shirt suggest it for warmer weather (71 degrees and higher) unless paried with a sweater then suggest for mid-temps (51 degrees to 70 degrees) unless paired with a jacket then suggest for colder temps (40 degrees to 50 degrees)
+    - If user adds a long sleeve shirt suggest it for cooler/cold weather (60 degrees and below)
+    - If user adds shorts suggest it for warmer/cooler weather (60 degrees and higher)
+    - If user adds a skirt (knee length or shorter) suggest it for warmer weather (71 degrees and higher)
+    - If user adds pants suggest it for cooler/cold weather (60 degrees and below)
+    - If user adds a sweater then suggest for mid-temps (51 degrees to 70 degrees)
+    - If user adds a jacket then suggest for colder temps (40 degrees to 50 degrees)

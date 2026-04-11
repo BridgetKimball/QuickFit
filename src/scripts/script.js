@@ -350,11 +350,36 @@ function bindEvents() {
     generateRecommendation(getPlannerState());
   });
 
-  elements.resetProfileButton.addEventListener("click", () => {
+  elements.resetProfileButton.addEventListener("click", async () => {
     state.profile = { ...defaultProfile };
+    state.closet = [];
+    state.favoriteOutfits = [];
+    state.currentRecommendation = null;
+    state.mannequinControls = {
+      tuckedIn: false,
+      jacketClosed: false,
+    };
+    state.weatherLocation = null;
+
     persistObject(STORAGE_KEYS.profile, state.profile);
+    persistCollection(STORAGE_KEYS.closet, state.closet);
+    persistCollection(STORAGE_KEYS.favoriteOutfits, state.favoriteOutfits);
+    localStorage.removeItem(STORAGE_KEYS.lastLocation);
+
+    elements.profileForm.reset();
+    elements.closetForm.reset();
+    elements.typeSelect.selectedIndex = 0;
+    elements.colorSelect.selectedIndex = 0;
+    elements.stylePreferenceSelect.value = defaultProfile.profileStyle;
+    setClosetFavoriteFilter("all");
+    populateOutfitDate();
+    updateStyleOptions(elements.typeSelect.value);
+    syncConditionalFields();
+    populateClosetFilter();
     renderProfile();
+    renderCloset();
     generateRecommendation(getPlannerState());
+    await loadWeatherDefaultsForSelection(false);
   });
 
   elements.favoriteOutfitButton.addEventListener("click", () => {
