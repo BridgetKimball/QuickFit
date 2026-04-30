@@ -279,6 +279,16 @@
               </div>
 
               <div class="form-row form-row--conditional">
+                <label id="closet-theme-field">
+                  Theme
+                  <select name="theme" id="closet-theme" required>
+                    <option value="Casual">Casual</option>
+                    <option value="Business-Casual">Business-Casual</option>
+                    <option value="Formal">Formal</option>
+                    <option value="Semi-formal">Semi-formal</option>
+                    <option value="Professional">Professional</option>
+                  </select>
+                </label>
                 <label id="skirt-length-field" class="conditional-field is-hidden">
                   Skirt length
                   <select name="skirtLength" id="skirtLength">
@@ -289,19 +299,6 @@
                     <option value="Floor">Floor length</option>
                   </select>
                 </label>
-                <label id="jewelry-field" class="conditional-field is-hidden">
-                  Jewelry type
-                  <select name="jewelryType" id="jewelryType">
-                    <option value="">Select jewelry type</option>
-                    <option value="Necklace">Necklace</option>
-                    <option value="Earrings">Earrings</option>
-                    <option value="Bracelets">Bracelets</option>
-                    <option value="Rings">Rings</option>
-                  </select>
-                </label>
-              </div>
-
-              <div class="form-row form-row--conditional">
                 <label id="sleeve-length-field" class="conditional-field is-hidden">
                   Sleeve length
                   <select name="sleeveLength" id="sleeveLength">
@@ -310,25 +307,14 @@
                     <option value="Long sleeve">Long sleeve</option>
                   </select>
                 </label>
-              </div>
-
-              <div class="form-row">
-                <label>
-                  Theme
-                  <select name="theme" required>
-                    <option value="Casual">Casual</option>
-                    <option value="Business-Casual">Business-Casual</option>
-                    <option value="Formal">Formal</option>
-                    <option value="Semi-formal">Semi-formal</option>
-                    <option value="Professional">Professional</option>
-                  </select>
-                </label>
-                <label>
-                  Warmth
-                  <select name="warmth" required>
-                    <option value="light">Light</option>
-                    <option value="medium">Medium</option>
-                    <option value="heavy">Heavy</option>
+                <label id="jewelry-field" class="conditional-field is-hidden">
+                  Jewelry type
+                  <select name="jewelryType" id="jewelryType">
+                    <option value="">Select jewelry type</option>
+                    <option value="Necklace">Necklace</option>
+                    <option value="Earrings">Earrings</option>
+                    <option value="Bracelets">Bracelets</option>
+                    <option value="Rings">Rings</option>
                   </select>
                 </label>
               </div>
@@ -431,6 +417,18 @@
           </article>
         </section>
       </main>
+    </div>
+
+    <div class="app-modal is-hidden" id="app-alert" role="dialog" aria-modal="true" aria-labelledby="app-alert-title">
+      <div class="app-modal__backdrop" data-close-alert></div>
+      <div class="app-modal__panel">
+        <p class="eyebrow">Fit check</p>
+        <h2 id="app-alert-title">No applicable pieces</h2>
+        <p id="app-alert-message"></p>
+        <button class="button button--primary" id="app-alert-close" type="button">
+          OK
+        </button>
+      </div>
     </div>
 
     <script src="./src/scripts/runtime-config.js"></script>

@@ -179,6 +179,62 @@ h3 {
   font-size: 0.94rem;
 }
 
+.app-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.app-modal.is-hidden {
+  display: none;
+}
+
+.app-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 65, 21, 0.437);
+  backdrop-filter: blur(2px);
+}
+
+.app-modal__panel {
+  position: relative;
+  width: min(460px, 100%);
+  padding: 28px;
+  border: 1px solid rgba(216, 234, 213, 0.42);
+  border-radius: var(--radius-xl);
+  background:
+    linear-gradient(135deg, var(--forest-800), var(--forest-500)),
+    linear-gradient(120deg, rgba(216, 234, 213, 0.18), transparent 64%);
+  color: white;
+}
+
+.app-modal__panel h2 {
+  margin: 8px 0 10px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(1.55rem, 3vw, 2rem);
+}
+
+.app-modal__panel .eyebrow {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.app-modal__panel p:not(.eyebrow) {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 22px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.55;
+}
+
+.app-modal__panel .button--primary {
+  color: var(--forest-800);
+  background: var(--cream-50);
+  box-shadow: none;
+}
+
 .section-nav {
   max-width: 1200px;
   margin: 8px auto 0;
@@ -508,7 +564,7 @@ select:focus {
 }
 
 .closet-card__meta {
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fit, 160px);
   gap: 10px;
 }
 
@@ -520,12 +576,18 @@ select:focus {
 
 .tag {
   display: inline-flex;
-  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  width: 160px;
+  min-height: 58px;
+  box-sizing: border-box;
   padding: 8px 12px;
   border-radius: 999px;
   background: rgba(8, 57, 16, 0.08);
   color: var(--forest-800);
   font-size: 0.92rem;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .closet-card__delete {

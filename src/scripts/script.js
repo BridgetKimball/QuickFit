@@ -159,6 +159,7 @@ const state = {
   weatherLocation: null,
   favoriteOutfits: loadCollection(STORAGE_KEYS.favoriteOutfits, []),
   currentRecommendation: null,
+  lastWeatherMismatchAlertKey: "",
   mannequinControls: {
     tuckedIn: false,
     jacketClosed: false,
@@ -206,6 +207,8 @@ const elements = {
   customColorInput: document.querySelector("#customColor"),
   jewelryField: document.querySelector("#jewelry-field"),
   jewelryTypeSelect: document.querySelector("#jewelryType"),
+  closetThemeField: document.querySelector("#closet-theme-field"),
+  closetThemeSelect: document.querySelector("#closet-theme"),
   weatherSelect: document.querySelector("#weather"),
   weatherStatus: document.querySelector("#weather-status"),
   refreshWeatherButton: document.querySelector("#refresh-weather"),
@@ -218,6 +221,9 @@ const elements = {
   shoesRecommendation: document.querySelector("#shoes-recommendation"),
   resetProfileButton: document.querySelector("#reset-profile"),
   savedOutfitsList: document.querySelector("#saved-outfits-list"),
+  appAlert: document.querySelector("#app-alert"),
+  appAlertMessage: document.querySelector("#app-alert-message"),
+  appAlertClose: document.querySelector("#app-alert-close"),
 };
 
 init();
@@ -289,6 +295,14 @@ function bindEvents() {
   elements.refreshWeatherButton.addEventListener("click", async () => {
     elements.outfitDate.value = formatDateInput(new Date());
     await loadWeatherDefaultsForSelection(true);
+  });
+
+  elements.appAlertClose?.addEventListener("click", closeAppAlert);
+  elements.appAlert?.querySelector("[data-close-alert]")?.addEventListener("click", closeAppAlert);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeAppAlert();
+    }
   });
 
   elements.outfitDate.addEventListener("change", async () => {
@@ -810,6 +824,7 @@ function updateStyleOptions(type) {
 
 function syncConditionalFields() {
   const showCustomColor = elements.colorSelect.value === "Multicolor";
+  const showClosetTheme = elements.typeSelect.value !== "Accessories";
   const showJewelrySubtype =
     elements.typeSelect.value === "Accessories" && elements.styleSelect.value === "Jewelry";
   const showSkirtLength = elements.typeSelect.value === "Skirts";
@@ -820,6 +835,10 @@ function syncConditionalFields() {
   elements.customColorField.classList.toggle("is-hidden", !showCustomColor);
   elements.customColorInput.required = showCustomColor;
   if (!showCustomColor) elements.customColorInput.value = "";
+
+  elements.closetThemeField.classList.toggle("is-hidden", !showClosetTheme);
+  elements.closetThemeSelect.required = showClosetTheme;
+  elements.closetThemeSelect.disabled = !showClosetTheme;
 
   elements.jewelryField.classList.toggle("is-hidden", !showJewelrySubtype);
   elements.jewelryTypeSelect.required = showJewelrySubtype;
@@ -855,8 +874,7 @@ function buildClosetItem(formData) {
     skirtLength: rawItem.skirtLength || "",
     sleeveLength: rawItem.sleeveLength || "",
     jewelryType: rawItem.jewelryType || "",
-    theme: rawItem.theme,
-    warmth: rawItem.warmth,
+    theme: rawItem.type === "Accessories" ? "" : rawItem.theme,
     isFavorite: false,
   };
 }
@@ -907,15 +925,13 @@ function renderCloset() {
 
   filteredItems.forEach((item) => {
     const materialLabel = item.material ? item.material : "Material not specified";
-    const patternLabel = item.pattern ? `${item.pattern} ` : "";
-    const detailLine = `${item.color} ${patternLabel}${describeStyle(item).toLowerCase()}${item.material ? ` in ${item.material.toLowerCase()}` : ""}`;
+    const displayName = getClosetCardDisplayName(item);
     const card = document.createElement("article");
     card.className = "closet-card fade-in";
     card.innerHTML = `
       <div class="closet-card__header">
         <div>
-          <div class="closet-card__title">${item.name}</div>
-          <p>${detailLine}</p>
+          <div class="closet-card__title">${displayName}</div>
         </div>
         <div class="closet-card__actions">
           <button
@@ -930,14 +946,7 @@ function renderCloset() {
         </div>
       </div>
       <div class="closet-card__meta">
-        <span class="tag">${item.type}</span>
-        <span class="tag">${describeStyle(item)}</span>
-        ${item.pattern ? `<span class="tag">${item.pattern} pattern</span>` : ""}
-        ${item.skirtLength ? `<span class="tag">${item.skirtLength} length</span>` : ""}
-        ${item.sleeveLength ? `<span class="tag">${item.sleeveLength}</span>` : ""}
-        <span class="tag">${item.theme}</span>
-        <span class="tag">${capitalize(item.warmth)} warmth</span>
-        <span class="tag">${materialLabel}</span>
+        ${getClosetCardTags(item, materialLabel).map((label) => `<span class="tag">${label}</span>`).join("")}
       </div>
     `;
 
@@ -959,6 +968,33 @@ function renderCloset() {
 
     elements.closetList.append(card);
   });
+}
+
+function getClosetCardTags(item, materialLabel) {
+  return [
+    shouldShowClosetStyleTag(item) ? describeStyle(item) : "",
+    item.pattern ? `${item.pattern} pattern` : "",
+    item.type === "Skirts" && item.skirtLength ? `${item.skirtLength} length` : "",
+    shouldShowClosetSleeveTag(item) ? item.sleeveLength : "",
+    item.theme,
+    materialLabel,
+  ].filter(Boolean);
+}
+
+function getClosetCardDisplayName(item) {
+  if (item.type === "Skirts") {
+    return `${item.color} Skirt`;
+  }
+
+  return getDisplayItemName(item);
+}
+
+function shouldShowClosetStyleTag(item) {
+  return item.type !== "Shirts";
+}
+
+function shouldShowClosetSleeveTag(item) {
+  return Boolean(item.sleeveLength) && item.type === "Shirts";
 }
 
 function setClosetFavoriteFilter(mode) {
@@ -1003,20 +1039,39 @@ function updateMannequinPresentation(presentation) {
 
 function generateRecommendation({ temperature, weather, season, theme, stylePreference }) {
   const effectiveTemperature = applyTemperatureBias(temperature, state.profile.temperatureBias);
-  const topItem = chooseItem("top", { effectiveTemperature, theme, stylePreference });
-  const bottomItem = chooseItem("bottom", { effectiveTemperature, theme, stylePreference });
-  const layerItem = chooseItem("jacket", { effectiveTemperature, theme, stylePreference, weather });
-  const accessoryItems = chooseAccessoryItems({ effectiveTemperature, theme, stylePreference, weather });
-  const shoesItem = chooseItem("shoes", { effectiveTemperature, theme, stylePreference, weather });
+  let layerItem = chooseItem("jacket", { effectiveTemperature, theme, stylePreference, weather });
+  let topItem = chooseItem("top", { effectiveTemperature, theme, stylePreference, layerItem });
+  let bottomItem = chooseItem("bottom", { effectiveTemperature, theme, stylePreference });
+  let accessoryItems = chooseAccessoryItems({ effectiveTemperature, theme, stylePreference, weather });
+  let shoesItem = chooseItem("shoes", { effectiveTemperature, theme, stylePreference, weather });
+  const missingRequiredCategories = getMissingRequiredOutfitCategories({ topItem, bottomItem, shoesItem });
+  const hasCompleteOutfit = !missingRequiredCategories.length;
+
+  if (!hasCompleteOutfit) {
+    topItem = null;
+    bottomItem = null;
+    layerItem = null;
+    accessoryItems = [];
+    shoesItem = null;
+  }
+
   const layerAndAccessoryDescriptions = [layerItem, ...accessoryItems].filter(Boolean).map(describeItem);
 
   elements.weatherSummary.textContent = `${temperature}°F · ${capitalize(weather)} · ${season}`;
   elements.topRecommendation.textContent = topItem
     ? describeItem(topItem)
-    : "Closet is empty, add a piece of clothing to get started.";
+    : !hasCompleteOutfit && state.closet.some((item) => typeGroups.top.includes(item.type))
+      ? "No complete outfit found for this theme and weather."
+    : state.closet.some((item) => typeGroups.top.includes(item.type))
+      ? "No applicable top found for this theme and weather."
+      : "Closet is empty, add a piece of clothing to get started.";
   elements.bottomRecommendation.textContent = bottomItem
     ? describeItem(bottomItem)
-    : "Once you add clothes, QuickFit will suggest bottoms here.";
+    : !hasCompleteOutfit && state.closet.some((item) => typeGroups.bottom.includes(item.type))
+      ? "No complete outfit found for this theme and weather."
+    : state.closet.some((item) => typeGroups.bottom.includes(item.type))
+      ? "No applicable bottom found for this theme and weather."
+      : "Once you add clothes, QuickFit will suggest bottoms here.";
   elements.layerRecommendation.textContent = layerItem
     ? layerAndAccessoryDescriptions.join(" ")
     : accessoryItems.length
@@ -1024,7 +1079,12 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
     : "Layers and accessories will appear here after you build your closet.";
   elements.shoesRecommendation.textContent = shoesItem
     ? describeItem(shoesItem)
-    : "Shoes will appear here after you add them to your closet.";
+    : !hasCompleteOutfit && state.closet.some((item) => typeGroups.shoes.includes(item.type))
+      ? "No complete outfit found for this theme and weather."
+    : state.closet.some((item) => typeGroups.shoes.includes(item.type))
+      ? "No applicable shoes found for this theme and weather."
+      : "Shoes will appear here after you add them to your closet.";
+  maybeAlertWeatherMismatch({ missingRequiredCategories, effectiveTemperature, weather, theme });
 
   state.currentRecommendation = {
     planner: { temperature, weather, season, theme, stylePreference, outfitDate: elements.outfitDate.value },
@@ -1191,37 +1251,63 @@ function findClosetItem(itemId) {
 function chooseItem(group, context) {
   const allowedTypes = typeGroups[group];
   const typedItems = state.closet.filter((item) => allowedTypes.includes(item.type));
-  const exactTheme = typedItems.filter((item) => item.theme === context.theme);
-  const themePool = exactTheme.length ? exactTheme : typedItems;
-  const warmthTarget = desiredWarmth(context.effectiveTemperature, group, context.weather);
-  const warmthMatches = themePool.filter((item) => item.warmth === warmthTarget);
-  const warmthPool = warmthMatches.length ? warmthMatches : themePool;
-  const styleMatches = warmthPool.filter((item) => {
-    const descriptor = `${item.name} ${describeStyle(item)}`.toLowerCase();
-    return descriptor.includes(context.stylePreference.toLowerCase());
-  });
-  const finalPool = [
-    ...styleMatches,
-    ...warmthPool.filter((item) => !styleMatches.includes(item)),
-  ];
+  const weatherPool = filterWeatherEligibleItems(typedItems, group, context);
+  if (!weatherPool.length) return null;
+
+  if (group === "jacket" && (context.effectiveTemperature <= 40 || context.weather === "snowy")) {
+    const coldWeatherCoats = rankItemsByStylePreference(
+      weatherPool.filter((item) => ["Parka", "Puffer jacket"].includes(item.style)),
+      context.stylePreference,
+    );
+    if (coldWeatherCoats.length) return coldWeatherCoats[0];
+  }
+
+  if (group === "jacket" && context.weather === "rainy") {
+    return chooseWeatherPriorityItem(weatherPool, context);
+  }
+
+  if (group === "shoes" && ["rainy", "snowy"].includes(context.weather)) {
+    return chooseWeatherPriorityItem(weatherPool, context, (item) => item.style === "Boots");
+  }
+
+  const exactTheme = weatherPool.filter((item) => item.theme === context.theme);
+  if (!exactTheme.length) return null;
+  const finalPool = rankItemsByStylePreference(exactTheme, context.stylePreference);
   return finalPool[0] || null;
+}
+
+function chooseWeatherPriorityItem(items, context, priorityFilter = null) {
+  const priorityItems = priorityFilter ? items.filter(priorityFilter) : items;
+  const pool = priorityItems.length ? priorityItems : items;
+  const exactTheme = pool.filter((item) => item.theme === context.theme);
+  const themePool = exactTheme.length ? exactTheme : pool;
+  const finalPool = rankItemsByStylePreference(themePool, context.stylePreference);
+  return finalPool[0] || null;
+}
+
+function rankItemsByStylePreference(items, stylePreference) {
+  const styleMatches = items.filter((item) => {
+    const descriptor = `${item.name} ${describeStyle(item)}`.toLowerCase();
+    return descriptor.includes(stylePreference.toLowerCase());
+  });
+  return [
+    ...styleMatches,
+    ...items.filter((item) => !styleMatches.includes(item)),
+  ];
 }
 
 function chooseAccessoryItems(context) {
   const allowedTypes = typeGroups.accessories;
   const typedItems = state.closet.filter((item) => allowedTypes.includes(item.type));
-  const exactTheme = typedItems.filter((item) => item.theme === context.theme);
-  const themePool = exactTheme.length ? exactTheme : typedItems;
-  const warmthTarget = desiredWarmth(context.effectiveTemperature, "layer", context.weather);
-  const warmthMatches = themePool.filter((item) => item.warmth === warmthTarget);
-  const warmthPool = warmthMatches.length ? warmthMatches : themePool;
-  const styleMatches = warmthPool.filter((item) => {
+  const weatherPool = filterWeatherEligibleItems(typedItems, "accessories", context);
+  if (!weatherPool.length) return [];
+  const styleMatches = weatherPool.filter((item) => {
     const descriptor = `${item.name} ${describeStyle(item)}`.toLowerCase();
     return descriptor.includes(context.stylePreference.toLowerCase());
   });
   const finalPool = [
     ...styleMatches,
-    ...warmthPool.filter((item) => !styleMatches.includes(item)),
+    ...weatherPool.filter((item) => !styleMatches.includes(item)),
   ];
   const accessoriesByStyle = new Map();
 
@@ -1234,22 +1320,230 @@ function chooseAccessoryItems(context) {
   return [...accessoriesByStyle.values()];
 }
 
-function desiredWarmth(temperature, group, weather) {
+function filterWeatherEligibleItems(items, group, context) {
+  return items.filter((item) => isWeatherEligibleItem(item, group, context));
+}
+
+function isWeatherEligibleItem(item, group, context) {
+  const temperature = context.effectiveTemperature;
+
+  if (group === "top") {
+    return isWeatherEligibleTop(item, temperature, context.layerItem);
+  }
+
+  if (group === "bottom") {
+    return isWeatherEligibleBottom(item, temperature);
+  }
+
+  if (group === "jacket") {
+    return isWeatherEligibleJacket(item, temperature, context.weather);
+  }
+
+  if (group === "accessories") {
+    return isWeatherEligibleAccessory(item, temperature, context.weather);
+  }
+
   if (group === "shoes") {
-    if (weather === "rainy" || weather === "snowy") return "heavy";
-    if (temperature <= 55) return "medium";
-    return "light";
+    return isWeatherEligibleShoes(item, temperature, context.weather);
   }
 
-  if (group === "layer") {
-    if (temperature <= 50 || weather === "rainy" || weather === "snowy") return "heavy";
-    if (temperature <= 68 || weather === "windy") return "medium";
-    return "light";
+  return true;
+}
+
+function isWeatherEligibleTop(item, temperature, layerItem = null) {
+  if (item.type === "Sweaters") {
+    return temperature >= 51 && temperature <= 70;
   }
 
-  if (temperature <= 45) return "heavy";
-  if (temperature <= 70) return "medium";
-  return "light";
+  if (item.type !== "Shirts") return true;
+
+  const sleeveLength = item.sleeveLength || defaultSleeveLengthForShirt(item);
+  const isShortSleeve = sleeveLength === "Short sleeve";
+  const isLongSleeve = sleeveLength === "Long sleeve";
+  const pairedWithJacket = Boolean(layerItem) && layerItem.type === "Jackets";
+
+  if (isShortSleeve) {
+    return temperature >= 71 || (pairedWithJacket && temperature >= 40 && temperature <= 50);
+  }
+
+  if (isLongSleeve) {
+    return temperature <= 60;
+  }
+
+  return true;
+}
+
+function defaultSleeveLengthForShirt(item) {
+  return item.style === "Blouse" || item.style === "Button Up" ? "Long sleeve" : "Short sleeve";
+}
+
+function isWeatherEligibleBottom(item, temperature) {
+  if (item.type === "Shorts") {
+    return temperature >= 60;
+  }
+
+  if (item.type === "Pants") {
+    return temperature <= 60;
+  }
+
+  if (item.type === "Skirts") {
+    const skirtLength = item.skirtLength || "Knee";
+    if (["Mini", "Knee"].includes(skirtLength)) {
+      return temperature >= 71;
+    }
+
+    return temperature >= 60;
+  }
+
+  return true;
+}
+
+function isWeatherEligibleJacket(item, temperature, weather) {
+  if (item.type !== "Jackets") return true;
+
+  if (weather === "snowy") {
+    return ["Parka", "Puffer jacket"].includes(item.style);
+  }
+
+  if (weather === "rainy" && temperature > 40) {
+    return !["Parka", "Puffer jacket"].includes(item.style);
+  }
+
+  if (temperature >= 70) return false;
+
+  if (["Parka", "Puffer jacket"].includes(item.style)) {
+    return temperature <= 40;
+  }
+
+  if (item.style === "Vest") {
+    return temperature >= 65 && temperature < 70;
+  }
+
+  return temperature >= 40 && temperature <= 65;
+}
+
+function isWeatherEligibleAccessory(item, temperature, weather) {
+  if (item.style === "Sunglasses") {
+    return weather === "sunny";
+  }
+
+  if (item.style === "Scarf") {
+    return temperature <= 40;
+  }
+
+  return true;
+}
+
+function isWeatherEligibleShoes(item, temperature, weather) {
+  if (weather === "rainy" || weather === "snowy") {
+    return isClosedToeShoe(item);
+  }
+
+  if (["Flip-flops", "Slides", "Wedges"].includes(item.style)) {
+    return temperature >= 60;
+  }
+
+  if (item.style === "Boots") {
+    return temperature <= 60;
+  }
+
+  return true;
+}
+
+function isClosedToeShoe(item) {
+  return !["Flip-flops", "Slides", "Wedges"].includes(item.style);
+}
+
+function getMissingRequiredOutfitCategories({ topItem, bottomItem, shoesItem }) {
+  return [
+    hasClosetItemsForGroup("top") && !topItem ? "top" : "",
+    hasClosetItemsForGroup("bottom") && !bottomItem ? "bottom" : "",
+    hasClosetItemsForGroup("shoes") && !shoesItem ? "shoes" : "",
+  ].filter(Boolean);
+}
+
+function hasClosetItemsForGroup(group) {
+  return state.closet.some((item) => typeGroups[group].includes(item.type));
+}
+
+function maybeAlertWeatherMismatch({ missingRequiredCategories, effectiveTemperature, weather, theme }) {
+  const missingWeatherMatch = missingRequiredCategories.length > 0;
+
+  if (!missingWeatherMatch) return;
+
+  const alertKey = `${effectiveTemperature}-${weather}-${missingRequiredCategories.join("-")}`;
+  if (state.lastWeatherMismatchAlertKey === alertKey) return;
+
+  state.lastWeatherMismatchAlertKey = alertKey;
+  showAppAlert(buildWeatherMismatchMessage(missingRequiredCategories, { effectiveTemperature, theme }));
+}
+
+function buildWeatherMismatchMessage(missingRequiredCategories, context) {
+  const missingLabels = missingRequiredCategories.map((category) => formatMissingCategoryLabel(category, context));
+  const missingText = missingLabels.length === 1
+    ? missingLabels[0]
+    : `${missingLabels.slice(0, -1).join(", ")} and ${missingLabels.at(-1)}`;
+
+  return {
+    guidance: "Add more clothes relative to current temperature. ",
+    missing: `Missing: ${missingText}.`,
+  };
+}
+
+function formatMissingCategoryLabel(category, { effectiveTemperature, theme }) {
+  const weatherBand = describeTemperatureBand(effectiveTemperature);
+  const themeLabel = theme ? `${theme.toLowerCase()} ` : "";
+
+  if (category === "top") {
+    return `${themeLabel}${describeNeededTop(effectiveTemperature)} for ${weatherBand}`;
+  }
+
+  if (category === "bottom") {
+    return `${themeLabel}${describeNeededBottom(effectiveTemperature)} for ${weatherBand}`;
+  }
+
+  if (category === "shoes") {
+    return `${themeLabel}${describeNeededShoes(effectiveTemperature)} for ${weatherBand}`;
+  }
+
+  return category;
+}
+
+function describeTemperatureBand(temperature) {
+  if (temperature <= 50) return "cold weather";
+  if (temperature <= 70) return "cool weather";
+  return "warm weather";
+}
+
+function describeNeededTop(temperature) {
+  if (temperature <= 50) return "long sleeve shirt / jacket-friendly top";
+  if (temperature <= 70) return "sweater / long sleeve shirt";
+  return "short sleeve shirt";
+}
+
+function describeNeededBottom(temperature) {
+  if (temperature <= 60) return "pants";
+  if (temperature <= 70) return "shorts / longer skirt";
+  return "shorts / skirt";
+}
+
+function describeNeededShoes(temperature) {
+  if (temperature <= 60) return "boots / closed-toe shoes";
+  return "warm-weather shoes";
+}
+
+function showAppAlert(message) {
+  if (!elements.appAlert || !elements.appAlertMessage) return;
+
+  elements.appAlertMessage.innerHTML = typeof message === "string"
+    ? message
+    : `<span>${message.guidance}</span><span>${message.missing}</span>`;
+  elements.appAlert.classList.remove("is-hidden");
+  elements.appAlertClose?.focus();
+}
+
+function closeAppAlert() {
+  elements.appAlert?.classList.add("is-hidden");
 }
 
 function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effectiveTemperature, accessoryItems = []) {
@@ -1264,7 +1558,7 @@ function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effecti
         topItem,
         state.mannequinControls,
         state.profile.presentation,
-        overallsActive ? "sleeves-only" : "full",
+        resolveTopRenderMode(topItem, layerItem, overallsActive),
       ),
   );
   setMannequinGarment(
@@ -1277,6 +1571,18 @@ function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effecti
   );
   setMannequinGarment(elements.mannequinShoes, renderShoesSvg(shoesItem, state.profile.presentation));
   syncMannequinButtons(topItem, bottomItem, layerItem);
+}
+
+function resolveTopRenderMode(topItem, layerItem, overallsActive) {
+  if (overallsActive) return "sleeves-only";
+  if (shouldHideTopSleevesUnderLayer(topItem, layerItem)) return "body-only";
+  return "full";
+}
+
+function shouldHideTopSleevesUnderLayer(topItem, layerItem) {
+  if (!topItem || !layerItem) return false;
+  if (!["Leather jacket", "Cardigan"].includes(layerItem.style)) return false;
+  return resolveTopSilhouette(topItem).startsWith("long-sleeve");
 }
 
 function sortAccessoryItemsForRendering(accessoryItems) {
@@ -1463,11 +1769,13 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
   }
 
   const showBody = mode !== "sleeves-only";
+  const showSleeves = mode !== "body-only";
   const bodyMarkup = showBody ? body : "";
   const collarMarkup = showBody ? collar : "";
   const trimMarkup = showBody ? trim : "";
+  const sleeveMarkup = showSleeves ? sleeves : "";
 
-  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleeves}${bodyMarkup}${collarMarkup}${trimMarkup}</svg>`;
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleeveMarkup}${bodyMarkup}${collarMarkup}${trimMarkup}</svg>`;
 }
 
 function resolveTopSilhouette(item) {
@@ -1537,7 +1845,7 @@ function renderLayerSvg(item, controls) {
     ? ""
     : `
       <path d="${isLeatherJacket
-        ? `M48 74 L28 92 L18 226 L33 226 L62 118 Z`
+        ? `M48 66 L28 86 L18 226 L33 226 L62 112 Z`
         : isPeacoat
           ? `M48 74 L24 88 L18 218 L39 218 L61 124 Z`
         : isPufferStyle
@@ -1545,7 +1853,7 @@ function renderLayerSvg(item, controls) {
         : `M57 86 L47 114 L52 ${Math.min(hemY + 24, 288)} L60 ${Math.min(hemY + 20, 284)} L67 138 Z`
       }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
       <path d="${isLeatherJacket
-        ? `M128 74 L148 92 L158 226 L143 226 L114 118 Z`
+        ? `M128 66 L148 86 L158 226 L143 226 L114 112 Z`
         : isPeacoat
           ? `M128 74 L152 88 L158 218 L137 218 L115 124 Z`
         : isPufferStyle
@@ -1557,7 +1865,7 @@ function renderLayerSvg(item, controls) {
   let body = "";
   if (closed) {
     body = `<path d="${isLeatherJacket
-      ? `M44 78 C58 66, 73 68, 88 82 C103 68, 118 66, 132 78 L127 ${hemY} C108 ${hemY + 7}, 68 ${hemY + 7}, 49 ${hemY} Z`
+      ? `M44 70 C58 58, 73 60, 88 74 C103 60, 118 58, 132 70 L127 ${hemY} C108 ${hemY + 7}, 68 ${hemY + 7}, 49 ${hemY} Z`
       : isVest
         ? buildVestSvg(fill, stroke, hemY)
       : isPeacoat
@@ -1569,7 +1877,7 @@ function renderLayerSvg(item, controls) {
   } else {
     body = `
       <path d="${isLeatherJacket
-        ? `M44 78 C56 68, 70 68, 78 92 L76 ${hemY} C66 ${hemY + 5}, 56 ${hemY + 4}, 48 ${hemY} Z`
+        ? `M44 70 C56 60, 70 60, 78 84 L76 ${hemY} C66 ${hemY + 5}, 56 ${hemY + 4}, 48 ${hemY} Z`
         : isVest
           ? `M48 82 C58 72, 72 72, 82 86 L76 ${hemY} L62 ${hemY + 18} L46 ${hemY} Z`
         : isPeacoat
@@ -1579,7 +1887,7 @@ function renderLayerSvg(item, controls) {
         : `M58 86 C63 78, 74 78, 82 98 L82 ${hemY} C72 ${hemY + 4}, 62 ${hemY + 3}, 56 ${hemY} Z`
       }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
       <path d="${isLeatherJacket
-        ? `M132 78 C120 68, 106 68, 98 92 L100 ${hemY} C110 ${hemY + 5}, 120 ${hemY + 4}, 128 ${hemY} Z`
+        ? `M132 70 C120 60, 106 60, 98 84 L100 ${hemY} C110 ${hemY + 5}, 120 ${hemY + 4}, 128 ${hemY} Z`
         : isVest
           ? `M128 82 C118 72, 104 72, 94 86 L100 ${hemY} L114 ${hemY + 18} L130 ${hemY} Z`
         : isPeacoat
@@ -1601,8 +1909,10 @@ function renderLayerSvg(item, controls) {
   const belt = item.style === "Trench coat"
     ? `<path d="M58 188 L118 188" stroke="${stroke}" stroke-width="3"/><path d="M88 182 L88 198" stroke="${stroke}" stroke-width="2"/>`
     : "";
+  const zipperTopY = isVest ? 122 : isLeatherJacket ? 82 : isPufferStyle ? 84 : isPeacoat ? 88 : 94;
+  const zipper = closed ? buildClosedJacketZipper(stroke, hemY, zipperTopY) : "";
 
-  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleevePath}${body}${vestDetails}${pufferLines}${puffLines}${belt}</svg>`;
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleevePath}${body}${vestDetails}${pufferLines}${puffLines}${belt}${zipper}</svg>`;
 }
 
 function buildVestSvg(fill, stroke, hemY) {
@@ -1655,6 +1965,27 @@ function buildPufferLines(stroke, closed) {
     `;
 
   return bodyLines;
+}
+
+function buildClosedJacketZipper(stroke, hemY, topY) {
+  const zipperBottomY = hemY - 8;
+  const teeth = Array.from(
+    { length: Math.max(0, Math.floor((zipperBottomY - topY) / 8)) },
+    (_, index) => {
+      const y = topY + 6 + index * 8;
+      return `
+        <path d="M86 ${y} L90 ${y + 2}" stroke="${stroke}" stroke-width="1" stroke-linecap="round"/>
+        <path d="M90 ${y + 4} L86 ${y + 6}" stroke="${stroke}" stroke-width="1" stroke-linecap="round"/>
+      `;
+    },
+  ).join("");
+
+  return `
+    <path d="M88 ${topY} L88 ${zipperBottomY}" stroke="${stroke}" stroke-width="2.5" stroke-linecap="round"/>
+    ${teeth}
+    <rect x="84.5" y="${zipperBottomY - 1}" width="7" height="5" rx="1.5" fill="${stroke}"/>
+    <path d="M88 ${zipperBottomY + 4} L84 ${zipperBottomY + 12} L92 ${zipperBottomY + 12} Z" fill="${stroke}"/>
+  `;
 }
 
 function renderAccessorySvg(item) {
@@ -1974,8 +2305,8 @@ function getPlannerState(formData = null) {
 }
 
 function applyTemperatureBias(temperature, bias) {
-  if (bias === "runs_cold") return temperature - 5;
-  if (bias === "runs_hot") return temperature + 5;
+  if (bias === "runs_cold") return temperature - 10;
+  if (bias === "runs_hot") return temperature + 10;
   return temperature;
 }
 
@@ -2058,15 +2389,7 @@ function describeItem(item) {
   const garmentLabel = describeGarmentLabel(item);
   const displayType = item.type === "Shorts" ? "shorts" : item.type.toLowerCase();
   const normalizedName = normalizeDescriptionText(item.name);
-  const lengthAlreadyNamed = item.skirtLength && normalizedName.includes(normalizeDescriptionText(item.skirtLength));
-  const skirtLengthLabel = item.skirtLength && !lengthAlreadyNamed ? ` ${item.skirtLength}` : "";
-  const displayName = item.type === "Pants" && !normalizedName.includes("pants")
-    ? `${item.name} Pants`
-    : item.type === "Skirts" && !normalizedName.includes("skirt")
-      ? `${item.name}${skirtLengthLabel} Skirt`
-      : item.type === "Skirts" && item.skirtLength && !lengthAlreadyNamed
-        ? `${item.name} (${item.skirtLength})`
-      : item.name;
+  const displayName = getDisplayItemName(item);
   const colorAlreadyNamed = normalizedName.includes(normalizeDescriptionText(item.color));
   const styleAlreadyNamed = normalizedName.includes(normalizeDescriptionText(item.style));
   const summaryParts = [
@@ -2085,10 +2408,59 @@ function describeItem(item) {
   return `${summary} Displayed as ${displayType}${detailNotes}.`;
 }
 
+function getDisplayItemName(item) {
+  const normalizedName = normalizeDescriptionText(item.name);
+  const typeNoun = displayTypeNoun(item);
+
+  if (item.type === "Skirts") {
+    const skirtName = getSkirtDisplayName(item, normalizedName);
+    return normalizeDescriptionText(skirtName).includes("skirt") ? skirtName : `${skirtName} ${typeNoun}`;
+  }
+
+  if (!typeNoun || normalizedName.includes(normalizeDescriptionText(typeNoun))) {
+    return item.name;
+  }
+
+  return `${item.name} ${typeNoun}`;
+}
+
+function displayTypeNoun(item) {
+  const typeNouns = {
+    Shirts: "Shirt",
+    Shorts: "Shorts",
+    Pants: "Pants",
+    Skirts: "Skirt",
+    Sweaters: "Sweater",
+    Jackets: "Jacket",
+  };
+
+  return typeNouns[item.type] || "";
+}
+
+function getSkirtDisplayName(item, normalizedName = normalizeDescriptionText(item.name)) {
+  if (!item.skirtLength) return item.name;
+
+  const lengthLabel = `${item.skirtLength}-length`;
+  const normalizedLength = normalizeDescriptionText(item.skirtLength);
+  const normalizedLengthLabel = normalizeDescriptionText(lengthLabel);
+
+  if (normalizedName.includes(normalizedLengthLabel)) {
+    return item.name;
+  }
+
+  if (normalizedName.includes(normalizedLength)) {
+    return item.name.replace(new RegExp(`\\b${escapeRegExp(item.skirtLength)}\\b`, "i"), lengthLabel);
+  }
+
+  return `${item.name} ${lengthLabel}`;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function describeStyle(item) {
   const styleNotes = [item.style];
-  if (item.skirtLength) styleNotes.push(item.skirtLength);
-  if (item.sleeveLength) styleNotes.push(item.sleeveLength);
   if (item.jewelryType) styleNotes.push(item.jewelryType);
   return styleNotes.length > 1 ? `${styleNotes[0]} (${styleNotes.slice(1).join(", ")})` : styleNotes[0];
 }
