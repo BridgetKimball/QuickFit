@@ -116,6 +116,8 @@ const typeGroups = {
   top: ["Shirts", "Sweaters"],
   bottom: ["Skirts", "Shorts", "Pants"],
   layer: ["Jackets", "Accessories"],
+  jacket: ["Jackets"],
+  accessories: ["Accessories"],
   shoes: ["Shoes"],
 };
 
@@ -1003,8 +1005,10 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
   const effectiveTemperature = applyTemperatureBias(temperature, state.profile.temperatureBias);
   const topItem = chooseItem("top", { effectiveTemperature, theme, stylePreference });
   const bottomItem = chooseItem("bottom", { effectiveTemperature, theme, stylePreference });
-  const layerItem = chooseItem("layer", { effectiveTemperature, theme, stylePreference, weather });
+  const layerItem = chooseItem("jacket", { effectiveTemperature, theme, stylePreference, weather });
+  const accessoryItems = chooseAccessoryItems({ effectiveTemperature, theme, stylePreference, weather });
   const shoesItem = chooseItem("shoes", { effectiveTemperature, theme, stylePreference, weather });
+  const layerAndAccessoryDescriptions = [layerItem, ...accessoryItems].filter(Boolean).map(describeItem);
 
   elements.weatherSummary.textContent = `${temperature}°F · ${capitalize(weather)} · ${season}`;
   elements.topRecommendation.textContent = topItem
@@ -1014,7 +1018,9 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
     ? describeItem(bottomItem)
     : "Once you add clothes, QuickFit will suggest bottoms here.";
   elements.layerRecommendation.textContent = layerItem
-    ? describeItem(layerItem)
+    ? layerAndAccessoryDescriptions.join(" ")
+    : accessoryItems.length
+      ? layerAndAccessoryDescriptions.join(" ")
     : "Layers and accessories will appear here after you build your closet.";
   elements.shoesRecommendation.textContent = shoesItem
     ? describeItem(shoesItem)
@@ -1025,12 +1031,13 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
     topItemId: topItem?.id || null,
     bottomItemId: bottomItem?.id || null,
     layerItemId: layerItem?.id || null,
+    accessoryItemIds: accessoryItems.map((item) => item.id),
     shoesItemId: shoesItem?.id || null,
     tuckedIn: state.mannequinControls.tuckedIn,
     jacketClosed: state.mannequinControls.jacketClosed,
   };
 
-  applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effectiveTemperature);
+  applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effectiveTemperature, accessoryItems);
   syncFavoriteOutfitButton();
   elements.rationale.textContent = buildRationale({
     temperature,
@@ -1042,13 +1049,14 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
     topItem,
     bottomItem,
     layerItem,
+    accessoryItems,
     shoesItem,
   });
 }
 
 function toggleFavoriteCurrentOutfit() {
   const recommendation = state.currentRecommendation;
-  if (!recommendation || (!recommendation.topItemId && !recommendation.bottomItemId && !recommendation.layerItemId && !recommendation.shoesItemId)) {
+  if (!recommendation || (!recommendation.topItemId && !recommendation.bottomItemId && !recommendation.layerItemId && !recommendation.accessoryItemIds?.length && !recommendation.shoesItemId)) {
     return;
   }
 
@@ -1063,6 +1071,7 @@ function toggleFavoriteCurrentOutfit() {
       topItemId: recommendation.topItemId,
       bottomItemId: recommendation.bottomItemId,
       layerItemId: recommendation.layerItemId,
+      accessoryItemIds: recommendation.accessoryItemIds || [],
       shoesItemId: recommendation.shoesItemId,
       tuckedIn: recommendation.tuckedIn,
       jacketClosed: recommendation.jacketClosed,
@@ -1077,7 +1086,12 @@ function toggleFavoriteCurrentOutfit() {
 
 function syncFavoriteOutfitButton() {
   const recommendation = state.currentRecommendation;
-  const canSave = recommendation && (recommendation.topItemId || recommendation.bottomItemId || recommendation.layerItemId);
+  const canSave = recommendation && (
+    recommendation.topItemId ||
+    recommendation.bottomItemId ||
+    recommendation.layerItemId ||
+    recommendation.accessoryItemIds?.length
+  );
   const isSaved = canSave && state.favoriteOutfits.some((outfit) => isSameSavedOutfit(outfit, recommendation));
 
   elements.favoriteOutfitButton.disabled = !canSave;
@@ -1091,12 +1105,20 @@ function isSameSavedOutfit(savedOutfit, recommendation) {
       savedOutfit.topItemId === recommendation.topItemId &&
       savedOutfit.bottomItemId === recommendation.bottomItemId &&
       savedOutfit.layerItemId === recommendation.layerItemId &&
+      areSameIdLists(savedOutfit.accessoryItemIds || [], recommendation.accessoryItemIds || []) &&
       savedOutfit.shoesItemId === recommendation.shoesItemId &&
       savedOutfit.planner.theme === recommendation.planner.theme &&
       savedOutfit.planner.stylePreference === recommendation.planner.stylePreference &&
       Boolean(savedOutfit.tuckedIn) === Boolean(recommendation.tuckedIn) &&
       Boolean(savedOutfit.jacketClosed) === Boolean(recommendation.jacketClosed)
   );
+}
+
+function areSameIdLists(firstIds, secondIds) {
+  if (firstIds.length !== secondIds.length) return false;
+  const sortedFirst = [...firstIds].sort();
+  const sortedSecond = [...secondIds].sort();
+  return sortedFirst.every((id, index) => id === sortedSecond[index]);
 }
 
 function renderSavedOutfits() {
@@ -1117,8 +1139,9 @@ function renderSavedOutfits() {
     const topItem = findClosetItem(outfit.topItemId);
     const bottomItem = findClosetItem(outfit.bottomItemId);
     const layerItem = findClosetItem(outfit.layerItemId);
+    const accessoryItems = (outfit.accessoryItemIds || []).map(findClosetItem).filter(Boolean);
     const shoesItem = findClosetItem(outfit.shoesItemId);
-    const itemLabels = [topItem?.name, bottomItem?.name, layerItem?.name, shoesItem?.name].filter(Boolean).join(" · ");
+    const itemLabels = [topItem?.name, bottomItem?.name, layerItem?.name, ...accessoryItems.map((item) => item.name), shoesItem?.name].filter(Boolean).join(" · ");
 
     card.innerHTML = `
       <strong>${outfit.planner.theme} · ${outfit.planner.stylePreference}</strong>
@@ -1177,8 +1200,38 @@ function chooseItem(group, context) {
     const descriptor = `${item.name} ${describeStyle(item)}`.toLowerCase();
     return descriptor.includes(context.stylePreference.toLowerCase());
   });
-  const finalPool = styleMatches.length ? styleMatches : warmthPool;
+  const finalPool = [
+    ...styleMatches,
+    ...warmthPool.filter((item) => !styleMatches.includes(item)),
+  ];
   return finalPool[0] || null;
+}
+
+function chooseAccessoryItems(context) {
+  const allowedTypes = typeGroups.accessories;
+  const typedItems = state.closet.filter((item) => allowedTypes.includes(item.type));
+  const exactTheme = typedItems.filter((item) => item.theme === context.theme);
+  const themePool = exactTheme.length ? exactTheme : typedItems;
+  const warmthTarget = desiredWarmth(context.effectiveTemperature, "layer", context.weather);
+  const warmthMatches = themePool.filter((item) => item.warmth === warmthTarget);
+  const warmthPool = warmthMatches.length ? warmthMatches : themePool;
+  const styleMatches = warmthPool.filter((item) => {
+    const descriptor = `${item.name} ${describeStyle(item)}`.toLowerCase();
+    return descriptor.includes(context.stylePreference.toLowerCase());
+  });
+  const finalPool = [
+    ...styleMatches,
+    ...warmthPool.filter((item) => !styleMatches.includes(item)),
+  ];
+  const accessoriesByStyle = new Map();
+
+  finalPool.forEach((item) => {
+    if (!accessoriesByStyle.has(item.style)) {
+      accessoriesByStyle.set(item.style, item);
+    }
+  });
+
+  return [...accessoriesByStyle.values()];
 }
 
 function desiredWarmth(temperature, group, weather) {
@@ -1199,9 +1252,10 @@ function desiredWarmth(temperature, group, weather) {
   return "light";
 }
 
-function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effectiveTemperature) {
+function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effectiveTemperature, accessoryItems = []) {
   const jumpsuitActive = Boolean(bottomItem) && bottomItem.style === "Jumpsuit";
   const overallsActive = Boolean(bottomItem) && bottomItem.style === "Overalls";
+  const sortedAccessoryItems = sortAccessoryItemsForRendering(accessoryItems);
   setMannequinGarment(
     elements.mannequinTop,
     jumpsuitActive
@@ -1219,12 +1273,22 @@ function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effecti
   );
   setMannequinGarment(
     elements.mannequinLayer,
-    layerItem?.type === "Accessories"
-      ? renderAccessorySvg(layerItem)
-      : renderLayerSvg(layerItem, state.mannequinControls),
+    `${renderLayerSvg(layerItem, state.mannequinControls)}${sortedAccessoryItems.map(renderAccessorySvg).join("")}`,
   );
   setMannequinGarment(elements.mannequinShoes, renderShoesSvg(shoesItem, state.profile.presentation));
   syncMannequinButtons(topItem, bottomItem, layerItem);
+}
+
+function sortAccessoryItemsForRendering(accessoryItems) {
+  const renderOrder = {
+    Hat: 0,
+    Scarf: 1,
+    Sunglasses: 2,
+  };
+
+  return [...accessoryItems].sort((firstItem, secondItem) => (
+    (renderOrder[firstItem.style] ?? 10) - (renderOrder[secondItem.style] ?? 10)
+  ));
 }
 
 function setMannequinGarment(element, svgMarkup) {
@@ -1608,9 +1672,9 @@ function renderAccessorySvg(item) {
 
   if (item.style === "Sunglasses") {
     return `<svg viewBox="0 0 176 420" aria-hidden="true">
-      <path d="M80 36 L96 36" stroke="${stroke}" stroke-width="2"/>
-      <rect x="69" y="30" width="16" height="10" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
-      <rect x="91" y="30" width="16" height="10" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M80 45 L96 45" stroke="${stroke}" stroke-width="2"/>
+      <rect x="69" y="39" width="16" height="10" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <rect x="91" y="39" width="16" height="10" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
     </svg>`;
   }
 
@@ -1876,9 +1940,10 @@ function buildRationale({
   topItem,
   bottomItem,
   layerItem,
+  accessoryItems = [],
   shoesItem,
 }) {
-  if (!topItem && !bottomItem && !layerItem && !shoesItem) {
+  if (!topItem && !bottomItem && !layerItem && !accessoryItems.length && !shoesItem) {
     return "No outfit to explain yet. Add clothing to your closet to generate a recommendation.";
   }
 
@@ -1890,6 +1955,7 @@ function buildRationale({
     topItem ? `${topItem.name} handles the top layer.` : "You still need a saved top option.",
     bottomItem ? `${bottomItem.name} anchors the outfit.` : "A saved bottom will help complete the look.",
     layerItem ? `${layerItem.name} adds extra weather protection.` : "No extra layer was selected from your closet.",
+    accessoryItems.length ? `${accessoryItems.map((item) => item.name).join(", ")} add accessories.` : "No accessories were selected from your closet.",
     shoesItem ? `${shoesItem.name} finishes the look.` : "Shoes can complete the outfit once they are in your closet.",
   ].join(" ");
 

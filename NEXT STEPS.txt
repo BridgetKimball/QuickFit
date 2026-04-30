@@ -2,15 +2,25 @@ Next Steps:
 - Add weather tags so certain clothing pieces would be recommended for certain types of weather
     - Sunglasses when sunny
     - Coat and boots when rainy/snowy
-- Edit the display for multicolor clothing: splice multicolor description for individual colors to display those individual colors
 - Make the clothes correspond better with weather (and factor in user's temperature preference: if user runs cold drop the degrees below down by 10 degrees but if the user runs hot then bump the degrees below up by 10 degrees, the degrees below are for balanced temperatures in people):
+    - If no outfits better for colder/warmer weather, give a popup saying "No applicable pieces of clothing, add more relative to the current temperatures"
+    - If user only put in short skirts (mini and knee lengths), shorts, and short sleeve shirts then can't make any outfits for cold weather (55 degrees and below)
+    - If user only put in long sleeve shirts and pants then can't make any outfits for warm weather (75 degrees and above)
     - If user adds a short sleeve shirt suggest it for warmer weather (71 degrees and higher) unless paried with a sweater then suggest for mid-temps (51 degrees to 70 degrees) unless paired with a jacket then suggest for colder temps (40 degrees to 50 degrees)
     - If user adds a long sleeve shirt suggest it for cooler/cold weather (60 degrees and below)
     - If user adds shorts suggest it for warmer/cooler weather (60 degrees and higher)
     - If user adds a skirt (knee length or shorter) suggest it for warmer weather (71 degrees and higher)
     - If user adds pants suggest it for cooler/cold weather (60 degrees and below)
     - If user adds a sweater then suggest for mid-temps (51 degrees to 70 degrees)
-    - If user adds a jacket then suggest for colder temps (40 degrees to 50 degrees)
+    - If user adds certain accessories they will be recommended for different temperatures or weather conditions
+        - Sunglasses should be recommended when the weather will be sunny
+        - Scarf should be recommended for temperatures 40 degrees and below
+    - Jackets should only be suggested when the temperature is below 70 degrees
+        - Parkas and puffer coats should only be recommended for temperatures 40 degrees and below
+        - Vests should only be recommended for temperatures 65 degrees and above
+        - All other jackets/coats should only be recommended for temperatures between 40 degrees and 65 degrees
+
+- Edit the display for multicolor clothing: splice multicolor description for individual colors to display those individual colors
 - Allow clothing picture uploads
     - The user will be able to upload a picture of one piece of clothing
     - The app will create a virtual version of the article of clothing they uploaded
