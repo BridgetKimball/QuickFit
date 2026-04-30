@@ -82,13 +82,12 @@ const clothingStyles = {
     "Loafers",
     "Oxfords",
     "Ballet flats",
-    "Kitten heels",
+    "Heels",
     "Stilettos",
     "Wedges",
-    "Platform heels",
     "Flip-flops",
     "Slides",
-    "Gladiator sandals",
+    "Boots",
   ],
   Accessories: ["Hat", "Sunglasses", "Scarf", "Jewelry"],
 };
@@ -1222,7 +1221,7 @@ function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effecti
       ? renderAccessorySvg(layerItem)
       : renderLayerSvg(layerItem, state.mannequinControls),
   );
-  setMannequinGarment(elements.mannequinShoes, renderShoesSvg(shoesItem));
+  setMannequinGarment(elements.mannequinShoes, renderShoesSvg(shoesItem, state.profile.presentation));
   syncMannequinButtons(topItem, bottomItem, layerItem);
 }
 
@@ -1505,13 +1504,108 @@ function renderAccessorySvg(item) {
   </svg>`;
 }
 
-function renderShoesSvg(item) {
+function renderShoesSvg(item, presentation = "Unspecified") {
   if (!item) return "";
 
   const fill = colorForItem(item.color, "#8a4a4a");
   const stroke = accentColor(fill);
-  const left = `<ellipse cx="57" cy="399" rx="18" ry="12" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
-  const right = `<ellipse cx="118" cy="399" rx="18" ry="12" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  const feminine = presentation === "Feminine";
+  const sneakerStyles = new Set(["Running shoes", "Basketball shoes", "Tennis shoes", "Canvas shoes"]);
+  const dressShoeStyles = new Set(["Loafers", "Oxfords"]);
+  const flatStyles = new Set(["Ballet flats", "Slides"]);
+  const heelStyles = new Set(["Heels", "Stilettos", "Wedges"]);
+  const sandalStyles = new Set(["Flip-flops", "Gladiator sandals"]);
+  const bootStyles = new Set(["Boots"]);
+
+  let left = "";
+  let right = "";
+
+  if (sneakerStyles.has(item.style)) {
+    left = `
+      <path d="M38 399 C42 388, 58 384, 74 388 C80 390, 83 395, 82 401 C73 413, 53 411, 40 404 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M48 392 L67 392" stroke="${stroke}" stroke-width="1.5"/>
+      <path d="M51 396 L70 396" stroke="${stroke}" stroke-width="1.5"/>
+    `;
+    right = `
+      <path d="M94 399 C98 388, 114 384, 130 388 C136 390, 139 395, 138 401 C129 413, 109 411, 96 404 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M104 392 L123 392" stroke="${stroke}" stroke-width="1.5"/>
+      <path d="M107 396 L126 396" stroke="${stroke}" stroke-width="1.5"/>
+    `;
+  } else if (dressShoeStyles.has(item.style)) {
+    left = `
+      <path d="M37 410 L37 404 C39 396, 50 392, 62 392 C72 392, 77 397, 77 404 L77 410 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M37 410 L37 404 C40 399, 44 396, 49 396 C53 396, 56 399, 57 404 L57 410 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+      <path d="M43 398 C51 393, 62 392, 71 397" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M65 394 L55 400" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round"/>
+    `;
+    right = `
+      <path d="M139 410 L139 404 C137 396, 126 392, 114 392 C104 392, 99 397, 99 404 L99 410 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M119 410 L119 404 C120 399, 124 396, 129 396 C133 396, 136 399, 139 404 L139 410 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+      <path d="M133 398 C125 393, 114 392, 105 397" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M111 394 L121 400" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round"/>
+    `;
+  } else if (flatStyles.has(item.style)) {
+    if (feminine) {
+      left = `
+        <path d="M72 406 L70 383 Q70 380 72 380 L76 403 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+        <path d="M51 406 C54 400, 58 397, 62 397 C66 397, 69 400, 71 406 C67 409, 55 409, 51 406 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      `;
+      right = `
+        <path d="M104 406 L106 383 Q106 380 104 380 L100 403 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+        <path d="M125 406 C122 400, 118 397, 114 397 C110 397, 107 400, 105 406 C109 409, 121 409, 125 406 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      `;
+    } else {
+      left = `
+        <path d="M69 403 L69 384 Q71 384 72 388 L73 403 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+        <path d="M46 408 C49 402, 55 399, 60 399 C66 399, 71 402, 74 408 C70 412, 50 412, 46 408 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      `;
+      right = `
+        <path d="M103 403 L106 388 Q107 384 109 384 L109 403 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+        <path d="M102 408 C105 402, 111 399, 116 399 C122 399, 127 402, 130 408 C126 412, 106 412, 102 408 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      `;
+    }
+  } else if (heelStyles.has(item.style)) {
+    if (feminine) {
+      left = `
+        <path d="M72 406 L70 383 Q70 380 72 380 L76 403 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+        <path d="M51 406 C54 400, 58 397, 62 397 C66 397, 69 400, 71 406 C67 409, 55 409, 51 406 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      `;
+      right = `
+        <path d="M104 406 L106 383 Q106 380 104 380 L100 403 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+        <path d="M125 406 C122 400, 118 397, 114 397 C110 397, 107 400, 105 406 C109 409, 121 409, 125 406 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      `;
+    } else {
+      left = `
+        <path d="M69 403 L69 384 Q71 384 72 388 L73 403 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+        <path d="M46 408 C49 402, 55 399, 60 399 C66 399, 71 402, 74 408 C70 412, 50 412, 46 408 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      `;
+      right = `
+        <path d="M103 403 L106 388 Q107 384 109 384 L109 403 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+        <path d="M102 408 C105 402, 111 399, 116 399 C122 399, 127 402, 130 408 C126 412, 106 412, 102 408 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      `;
+    }
+  } else if (sandalStyles.has(item.style)) {
+    left = `
+      <rect x="45" y="407" width="28" height="5" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M53 400 L58 405 L70 400" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    `;
+    right = `
+      <rect x="104" y="407" width="28" height="5" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M105 400 L118 405 L124 400" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    `;
+  } else if (bootStyles.has(item.style)) {
+    left = `
+      <rect x="50" y="340" width="25" height="60" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <ellipse cx="53" cy="399" rx="25" ry="12" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    `;
+    right = `
+      <rect x="101" y="340" width="25" height="60" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <ellipse cx="125" cy="399" rx="25" ry="12" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    `;
+  } else {
+    left = `<ellipse cx="57" cy="399" rx="18" ry="12" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+    right = `<ellipse cx="118" cy="399" rx="18" ry="12" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  }
 
   return `<svg viewBox="0 0 176 420" aria-hidden="true">${left}${right}</svg>`;
 }

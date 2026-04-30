@@ -8,12 +8,9 @@ Next Steps:
         - Hat
         - Scarf
         - Sunglasses
-        - Jewelry: necklace: earrings, bracelet, rings
+        - Jewelry: necklace, earrings, bracelet, rings
     - Make varied shoes (right now there's only one type being displayed)
 - Test close jacket button (applies to certain sweaters too)
-- Add more to profile to help the stylist suggest more things that the user will be more inclined to wear
-    - Favorite color
-    - Favorite pattern
 - Edit the display for multicolor clothing: splice multicolor description for individual colors to display those individual colors
 - Make the clothes correspond better with weather (and factor in user's temperature preference: if user runs cold drop the degrees below down by 10 degrees but if the user runs hot then bump the degrees below up by 10 degrees, the degrees below are for balanced temperatures in people):
     - If user adds a short sleeve shirt suggest it for warmer weather (71 degrees and higher) unless paried with a sweater then suggest for mid-temps (51 degrees to 70 degrees) unless paired with a jacket then suggest for colder temps (40 degrees to 50 degrees)
@@ -23,3 +20,30 @@ Next Steps:
     - If user adds pants suggest it for cooler/cold weather (60 degrees and below)
     - If user adds a sweater then suggest for mid-temps (51 degrees to 70 degrees)
     - If user adds a jacket then suggest for colder temps (40 degrees to 50 degrees)
+- Allow clothing picture uploads
+    - The user will be able to upload a picture of one piece of clothing
+    - The app will create a virtual version of the article of clothing they uploaded
+    - App will determine the type, style, color, theme (casual, formal, etc), warmth (light, med, heavy), pattern (if applicable), length (if shirt or skirt)
+    - Need to implement error handling (prompt for a re-upload)
+        - If user takes pic of multiple pieces of clothing
+        - If there is no piece of clothing within the picture
+        - If unable to determine type/style/theme/warmth notify user
+- Reorganize JavaScript to have a separate file for clothing code
+
+- Add more to profile to help the stylist suggest more things that the user will be more inclined to wear
+    - Favorite color
+    - Favorite pattern
+- Edit empty closet text
+    - For TOP, BOTTOM, LAYER AND EXTRAS, SHOES
+    - Phrase it in the way that is specific to the clothing piece
+    - Similarly, rephrase non-empty closet text
+- Add popup notifications
+    - Profile saved/reset
+    - Now using current weather
+    - Save item to closet
+    - Now showing favorites
+    - Item favorited
+    - Item removed
+    - Now generating recommendation
+    - Shirt now tucked/untucked
+    - Jacket now closed/opened
