@@ -22,7 +22,6 @@ const clothingStyles = {
     "Denim",
     "Boyfriend",
     "Cargo",
-    "Skort",
     "Pleat",
     "Knee",
     "Gym",
@@ -43,9 +42,7 @@ const clothingStyles = {
     "A-Line",
     "Pencil",
     "Trumpet",
-    "Sarong",
     "Tiered",
-    "Wrap",
     "Asymmetrical",
   ],
   Sweaters: [
@@ -89,7 +86,12 @@ const clothingStyles = {
     "Slides",
     "Boots",
   ],
-  Accessories: ["Hat", "Sunglasses", "Scarf", "Jewelry"],
+  Accessories: [
+    "Hat",
+    "Sunglasses",
+    "Scarf",
+    // "Jewelry"
+  ],
 };
 
 const colorOptions = [
@@ -1233,7 +1235,7 @@ function setMannequinGarment(element, svgMarkup) {
 
 function syncMannequinButtons(topItem, bottomItem, layerItem) {
   const onePieceBottom = Boolean(bottomItem) && ["Overalls", "Jumpsuit"].includes(bottomItem.style);
-  const tuckable = Boolean(topItem) && !onePieceBottom && !["Sports bra", "Tube top"].includes(topItem.style);
+  const tuckable = Boolean(topItem) && !onePieceBottom && !["Sports bra"].includes(topItem.style);
   elements.toggleTuckButton.disabled = !tuckable;
   elements.toggleTuckButton.textContent = state.mannequinControls.tuckedIn ? "Untuck" : "Tuck";
   elements.toggleTuckButton.setAttribute("aria-pressed", state.mannequinControls.tuckedIn ? "true" : "false");
@@ -1253,15 +1255,16 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
   const silhouette = resolveTopSilhouette(item);
   const feminine = presentation === "Feminine";
   const isButtonUp = item.style === "Button Up";
+  const isTurtleneckSilhouette = silhouette.includes("turtleneck");
   const hemMap = {
     "short-sleeve": tucked ? 165 : (feminine ? 180 : 180),
     "long-sleeve": tucked ? 160 : (feminine ? 180 : 180),
-    "short-sleeve-turtleneck": tucked ? 202 : (feminine ? 200 : 212),
-    "long-sleeve-turtleneck": tucked ? 202 : (feminine ? 198 : 210),
-    "tube-top": 176,
-    "tank-top": feminine ? 184 : 190,
+    "short-sleeve-turtleneck": tucked ? 168 : (feminine ? 200 : 212),
+    "long-sleeve-turtleneck": tucked ? 168 : (feminine ? 198 : 210),
+    "tube-top": tucked ? (feminine ? 195 : 164) : 176,
+    "tank-top": tucked ? (feminine ? 164 : 170) : (feminine ? 184 : 190),
   };
-  const hemY = hemMap[silhouette];
+  const hemY = isButtonUp ? (tucked ? 172 : 204) : hemMap[silhouette];
   const masculineUntuckedShortSleeve = !feminine && !tucked && silhouette === "short-sleeve";
 
   if (silhouette === "tube-top") {
@@ -1280,12 +1283,15 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
   }
 
   if (silhouette === "tank-top") {
+    const tankBodyY = feminine ? 106 : 108;
+    const tankStrapY = feminine ? 82 : 78;
+    const tankStrapHeight = feminine ? 28 : 32;
     return `<svg viewBox="0 0 176 420" aria-hidden="true">
       <rect
         x="${feminine ? 58 : 54}"
-        y="112"
+        y="${tankBodyY}"
         width="${feminine ? 60 : 68}"
-        height="${hemY - 112}"
+        height="${hemY - tankBodyY}"
         rx="6"
         fill="${fill}"
         stroke="${stroke}"
@@ -1293,9 +1299,9 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
       />
       <rect
         x="${feminine ? 62 : 60}"
-        y="${feminine ? 88 : 84}"
+        y="${tankStrapY}"
         width="${feminine ? 8 : 9}"
-        height="${feminine ? 28 : 32}"
+        height="${tankStrapHeight}"
         rx="4"
         fill="${fill}"
         stroke="${stroke}"
@@ -1303,9 +1309,9 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
       />
       <rect
         x="${feminine ? 106 : 107}"
-        y="${feminine ? 88 : 84}"
+        y="${tankStrapY}"
         width="${feminine ? 8 : 9}"
-        height="${feminine ? 28 : 32}"
+        height="${tankStrapHeight}"
         rx="4"
         fill="${fill}"
         stroke="${stroke}"
@@ -1316,20 +1322,32 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
 
   const feminineTuckedShortSleeve = feminine && tucked && silhouette === "short-sleeve";
   const body = feminine
-    ? (feminineTuckedShortSleeve
-      ? `<path d="M51 86 C61 74, 76 74, 88 86 C100 74, 115 74, 125 86 L115 ${hemY} C105 ${hemY + 2}, 71 ${hemY + 2}, 61 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
-      : `<path d="M51 86 C61 74, 76 74, 88 86 C100 74, 115 74, 125 86 L117 ${hemY} C107 ${hemY + 2}, 69 ${hemY + 2}, 59 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`)
-    : (masculineUntuckedShortSleeve
-      ? `<path d="M50 92 L66 80 L76 80 L76 84 L82 92 L94 92 L100 84 L100 80 L110 80 L126 92 L120 ${hemY + 12} C108 ${hemY + 14}, 68 ${hemY + 14}, 56 ${hemY + 12} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
-      : `<path d="M54 92 L68 80 L78 80 L78 84 L83 92 L93 92 L98 84 L98 80 L108 80 L122 92 L116 ${hemY} C106 ${hemY + 2}, 70 ${hemY + 2}, 60 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`);
+    ? (isTurtleneckSilhouette
+      ? `<path d="M44 78 C58 66, 76 66, 88 78 C100 66, 118 66, 132 78 L126 ${hemY} C112 ${hemY + 2}, 64 ${hemY + 2}, 50 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+      : isButtonUp
+      ? (tucked
+        ? `<path d="M50 82 C60 70, 76 70, 88 82 C100 70, 116 70, 126 82 L120 ${hemY} C108 ${hemY + 2}, 68 ${hemY + 2}, 56 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+        : `<path d="M44 82 C58 70, 76 70, 88 82 C100 70, 118 70, 132 82 L126 ${hemY} C112 ${hemY + 2}, 64 ${hemY + 2}, 50 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`)
+      : feminineTuckedShortSleeve
+      ? `<path d="M51 80 C61 68, 76 68, 88 80 C100 68, 115 68, 125 80 L115 ${hemY} C105 ${hemY + 2}, 71 ${hemY + 2}, 61 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+      : `<path d="M51 80 C61 68, 76 68, 88 80 C100 68, 115 68, 125 80 L117 ${hemY} C107 ${hemY + 2}, 69 ${hemY + 2}, 59 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`)
+    : (isTurtleneckSilhouette
+      ? `<path d="M46 84 L64 72 L78 72 L78 76 L83 84 L93 84 L98 76 L98 72 L112 72 L130 84 L124 ${hemY} C110 ${hemY + 2}, 66 ${hemY + 2}, 52 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+      : isButtonUp
+      ? (tucked
+        ? `<path d="M50 84 L66 72 L78 72 L78 76 L83 84 L93 84 L98 76 L98 72 L110 72 L126 84 L120 ${hemY} C108 ${hemY + 2}, 68 ${hemY + 2}, 56 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+        : `<path d="M44 84 L62 72 L78 72 L78 76 L83 84 L93 84 L98 76 L98 72 L114 72 L132 84 L126 ${hemY} C112 ${hemY + 2}, 64 ${hemY + 2}, 50 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`)
+      : masculineUntuckedShortSleeve
+      ? `<path d="M50 86 L66 74 L76 74 L76 78 L82 86 L94 86 L100 78 L100 74 L110 74 L126 86 L120 ${hemY + 12} C108 ${hemY + 14}, 68 ${hemY + 14}, 56 ${hemY + 12} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+      : `<path d="M54 86 L68 74 L78 74 L78 78 L83 86 L93 86 L98 78 L98 74 L108 74 L122 86 L116 ${hemY} C106 ${hemY + 2}, 70 ${hemY + 2}, 60 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`);
   let sleeves = "";
   let collar = "";
   let trim = "";
 
   if (silhouette === "short-sleeve" || silhouette === "short-sleeve-turtleneck") {
     sleeves = `
-      <path d="M${feminine ? 55 : 58} 80 L${feminine ? 35 : 35} 90 L${feminine ? 31 : 30} 132 L${feminine ? 57 : 60} 134 L${feminine ? 67 : 68} 95 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
-      <path d="M${feminine ? 121 : 118} 80 L${feminine ? 141 : 140} 90 L${feminine ? 145 : 145} 132 L${feminine ? 119 : 116} 134 L${feminine ? 109 : 108} 95 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M${feminine ? 55 : 58} 74 L${feminine ? 35 : 35} 84 L${feminine ? 31 : 30} 132 L${feminine ? 57 : 60} 134 L${feminine ? 67 : 68} 89 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M${feminine ? 121 : 118} 74 L${feminine ? 141 : 140} 84 L${feminine ? 145 : 145} 132 L${feminine ? 119 : 116} 134 L${feminine ? 109 : 108} 89 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
     `;
   } else {
     const shoulderY = feminine ? 84 : 83;
@@ -1350,11 +1368,15 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
   }
 
   if (silhouette === "long-sleeve-turtleneck" || silhouette === "short-sleeve-turtleneck") {
-    collar = `<rect x="73" y="74" width="30" height="18" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+    collar = `<rect x="73" y="66" width="30" height="20" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
   } else {
-    collar = feminine
-      ? `<path d="M75 86 Q88 104 101 86" fill="none" stroke="${stroke}" stroke-width="2"/>`
-      : `<path d="M76 82 L76 88 L82 94 L94 94 L100 88 L100 82" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    collar = silhouette === "short-sleeve"
+      ? (feminine
+        ? `<path d="M75 80 Q88 98 101 80" fill="none" stroke="${stroke}" stroke-width="2"/>`
+        : `<path d="M76 76 L76 82 L82 88 L94 88 L100 82 L100 76" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`)
+      : feminine
+        ? `<path d="M75 86 Q88 104 101 86" fill="none" stroke="${stroke}" stroke-width="2"/>`
+        : `<path d="M76 82 L76 88 L82 94 L94 94 L100 88 L100 82" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
   }
 
   if (!feminine && !silhouette.includes("turtleneck")) {
@@ -1362,11 +1384,16 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
   }
 
   if (isButtonUp) {
+    collar = `
+      <path d="M70 72 L86 72 L83 92 L66 86 Z" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M90 72 L106 72 L110 86 L93 92 Z" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M82 74 L88 92 L94 74" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    `;
     trim = `
-      <path d="M88 84 L88 ${hemY}" stroke="${stroke}" stroke-width="2"/>
-      <circle cx="88" cy="102" r="2.25" fill="${stroke}"/>
-      <circle cx="88" cy="118" r="2.25" fill="${stroke}"/>
-      <circle cx="88" cy="134" r="2.25" fill="${stroke}"/>
+      <path d="M88 78 L88 ${hemY}" stroke="${stroke}" stroke-width="2"/>
+      <circle cx="88" cy="96" r="2.25" fill="${stroke}"/>
+      <circle cx="88" cy="114" r="2.25" fill="${stroke}"/>
+      <circle cx="88" cy="132" r="2.25" fill="${stroke}"/>
       <circle cx="88" cy="150" r="2.25" fill="${stroke}"/>
     `;
   }
@@ -1406,6 +1433,10 @@ function renderBottomSvg(item, controls, effectiveTemperature, presentation = "U
   const tucked = ignoresTuck ? false : controls.tuckedIn;
   const waistY = item.type === "Pants"
     ? (tucked ? 165 : 180)
+    : item.type === "Shorts"
+      ? (tucked ? 160 : 176)
+    : item.type === "Skirts"
+      ? 164
     : (tucked ? 190 : 210);
 
   if (item.type === "Skirts") {
@@ -1428,47 +1459,138 @@ function renderLayerSvg(item, controls) {
   const longJacketStyles = new Set(["Parka", "Peacoat", "Overcoat", "Trench coat"]);
   const sleevelessStyles = new Set(["Vest"]);
   const isLeatherJacket = item.style === "Leather jacket";
-  const hemY = isLeatherJacket ? 222 : (longJacketStyles.has(item.style) ? 318 : 248);
+  const isVest = item.style === "Vest";
+  const isPeacoat = item.style === "Peacoat";
+  const isPufferStyle = item.style === "Puffer jacket" || item.style === "Parka";
+  const hemY = isLeatherJacket
+    ? 212
+    : isVest
+      ? 232
+    : (isPeacoat || isPufferStyle)
+      ? (isPufferStyle ? 258 : 294)
+      : (longJacketStyles.has(item.style) ? 318 : 248);
   const sleevePath = sleevelessStyles.has(item.style)
     ? ""
     : `
       <path d="${isLeatherJacket
-        ? `M56 86 L40 106 L30 236 L42 236 L64 130 Z`
+        ? `M48 74 L28 92 L18 226 L33 226 L62 118 Z`
+        : isPeacoat
+          ? `M48 74 L24 88 L18 218 L39 218 L61 124 Z`
+        : isPufferStyle
+          ? `M42 72 L16 86 L8 222 L34 222 L59 124 Z`
         : `M57 86 L47 114 L52 ${Math.min(hemY + 24, 288)} L60 ${Math.min(hemY + 20, 284)} L67 138 Z`
       }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
       <path d="${isLeatherJacket
-        ? `M120 86 L136 106 L146 236 L134 236 L112 130 Z`
+        ? `M128 74 L148 92 L158 226 L143 226 L114 118 Z`
+        : isPeacoat
+          ? `M128 74 L152 88 L158 218 L137 218 L115 124 Z`
+        : isPufferStyle
+          ? `M134 72 L160 86 L168 222 L142 222 L117 124 Z`
         : `M119 86 L129 114 L124 ${Math.min(hemY + 24, 288)} L116 ${Math.min(hemY + 20, 284)} L109 138 Z`
       }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
     `;
 
   let body = "";
   if (closed) {
-    body = `<path d="M58 86 C64 76, 76 76, 88 90 C100 76, 112 76, 118 86 L120 ${hemY} C106 ${hemY + 6}, 70 ${hemY + 6}, 56 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+    body = `<path d="${isLeatherJacket
+      ? `M44 78 C58 66, 73 68, 88 82 C103 68, 118 66, 132 78 L127 ${hemY} C108 ${hemY + 7}, 68 ${hemY + 7}, 49 ${hemY} Z`
+      : isVest
+        ? buildVestSvg(fill, stroke, hemY)
+      : isPeacoat
+        ? `M46 76 C58 66, 74 66, 88 80 C102 66, 118 66, 130 76 L136 ${hemY} C114 ${hemY + 8}, 62 ${hemY + 8}, 40 ${hemY} Z`
+      : isPufferStyle
+        ? `M38 74 C54 62, 74 62, 88 78 C102 62, 122 62, 138 74 L144 ${hemY} C120 ${hemY + 9}, 56 ${hemY + 9}, 32 ${hemY} Z`
+      : `M58 86 C64 76, 76 76, 88 90 C100 76, 112 76, 118 86 L120 ${hemY} C106 ${hemY + 6}, 70 ${hemY + 6}, 56 ${hemY} Z`
+    }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
   } else {
     body = `
       <path d="${isLeatherJacket
-        ? `M58 86 C63 78, 74 78, 84 98 L82 ${hemY} C72 ${hemY + 3}, 61 ${hemY + 2}, 56 ${hemY} Z`
+        ? `M44 78 C56 68, 70 68, 78 92 L76 ${hemY} C66 ${hemY + 5}, 56 ${hemY + 4}, 48 ${hemY} Z`
+        : isVest
+          ? `M48 82 C58 72, 72 72, 82 86 L76 ${hemY} L62 ${hemY + 18} L46 ${hemY} Z`
+        : isPeacoat
+          ? `M46 76 C58 66, 74 66, 82 90 L78 ${hemY} C66 ${hemY + 6}, 52 ${hemY + 5}, 40 ${hemY} Z`
+        : isPufferStyle
+          ? `M38 74 C54 62, 74 62, 82 90 L78 ${hemY} C64 ${hemY + 8}, 48 ${hemY + 6}, 32 ${hemY} Z`
         : `M58 86 C63 78, 74 78, 82 98 L82 ${hemY} C72 ${hemY + 4}, 62 ${hemY + 3}, 56 ${hemY} Z`
       }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
       <path d="${isLeatherJacket
-        ? `M118 86 C113 78, 102 78, 92 98 L94 ${hemY} C104 ${hemY + 3}, 115 ${hemY + 2}, 120 ${hemY} Z`
+        ? `M132 78 C120 68, 106 68, 98 92 L100 ${hemY} C110 ${hemY + 5}, 120 ${hemY + 4}, 128 ${hemY} Z`
+        : isVest
+          ? `M128 82 C118 72, 104 72, 94 86 L100 ${hemY} L114 ${hemY + 18} L130 ${hemY} Z`
+        : isPeacoat
+          ? `M130 76 C118 66, 102 66, 94 90 L98 ${hemY} C110 ${hemY + 6}, 124 ${hemY + 5}, 136 ${hemY} Z`
+        : isPufferStyle
+          ? `M138 74 C122 62, 102 62, 94 90 L98 ${hemY} C112 ${hemY + 8}, 128 ${hemY + 6}, 144 ${hemY} Z`
         : `M118 86 C113 78, 102 78, 94 98 L94 ${hemY} C104 ${hemY + 4}, 114 ${hemY + 3}, 120 ${hemY} Z`
       }" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
     `;
   }
 
-  const lapels = item.style === "Leather jacket" || item.style === "Tuxedo jacket" || item.style === "Blazer" || item.style === "Peacoat"
-    ? `<path d="M68 112 L84 138 L88 120 L92 138 L108 112" fill="none" stroke="${stroke}" stroke-width="3"/>`
+  const pufferLines = isPufferStyle
+    ? buildPufferLines(stroke, closed)
     : "";
-  const puffLines = item.style === "Puffer jacket" || item.style === "Quilted jacket"
+  const vestDetails = isVest ? buildVestDetails(stroke, fill, hemY) : "";
+  const puffLines = item.style === "Quilted jacket"
     ? Array.from({ length: 5 }, (_, index) => `<path d="M62 ${126 + index * 18} L114 ${126 + index * 18}" stroke="${stroke}" stroke-width="1.5"/>`).join("")
     : "";
   const belt = item.style === "Trench coat"
     ? `<path d="M58 188 L118 188" stroke="${stroke}" stroke-width="3"/><path d="M88 182 L88 198" stroke="${stroke}" stroke-width="2"/>`
     : "";
 
-  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleevePath}${body}${lapels}${puffLines}${belt}</svg>`;
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleevePath}${body}${vestDetails}${pufferLines}${puffLines}${belt}</svg>`;
+}
+
+function buildVestSvg(fill, stroke, hemY) {
+  return `
+    M48 82
+    C58 72, 72 72, 82 86
+    L88 120
+    L94 86
+    C104 72, 118 72, 128 82
+    L130 ${hemY}
+    L114 ${hemY + 18}
+    L88 ${hemY - 4}
+    L62 ${hemY + 18}
+    L46 ${hemY}
+    Z
+  `;
+}
+
+function buildVestDetails(stroke, fill, hemY) {
+  return `
+    <path d="M48 82 C58 72, 72 72, 82 86 L88 120" fill="none" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M128 82 C118 72, 104 72, 94 86 L88 120" fill="none" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M88 120 L88 ${hemY - 4}" stroke="${stroke}" stroke-width="2"/>
+    <circle cx="88" cy="144" r="2.6" fill="${stroke}"/>
+    <circle cx="88" cy="170" r="2.6" fill="${stroke}"/>
+    <circle cx="88" cy="196" r="2.6" fill="${stroke}"/>
+    <path d="M55 194 L76 194" stroke="${stroke}" stroke-width="2" stroke-linecap="round"/>
+    <path d="M100 194 L121 194" stroke="${stroke}" stroke-width="2" stroke-linecap="round"/>
+    <path d="M62 ${hemY + 18} L88 ${hemY - 4} L114 ${hemY + 18}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>
+  `;
+}
+
+function buildPufferLines(stroke, closed) {
+  const bodyLines = closed
+    ? `
+      ${[116, 148, 180, 212]
+        .map((y) => `<path d="M10 ${y} C48 ${y + 6}, 128 ${y + 6}, 166 ${y}" stroke="${stroke}" stroke-width="2" fill="none" stroke-linecap="round"/>`)
+        .join("")}
+      <path d="M32 244 C58 249, 118 249, 144 244" stroke="${stroke}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    `
+    : `
+      ${[116, 148, 180, 212]
+        .map((y) => `
+          <path d="M14 ${y} C30 ${y + 4}, 58 ${y + 5}, 78 ${y}" stroke="${stroke}" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <path d="M98 ${y} C118 ${y + 5}, 146 ${y + 4}, 162 ${y}" stroke="${stroke}" stroke-width="2" fill="none" stroke-linecap="round"/>
+        `)
+        .join("")}
+      <path d="M32 244 C46 248, 64 248, 78 244" stroke="${stroke}" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M98 244 C112 248, 130 248, 144 244" stroke="${stroke}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    `;
+
+  return bodyLines;
 }
 
 function renderAccessorySvg(item) {
@@ -1479,23 +1601,23 @@ function renderAccessorySvg(item) {
 
   if (item.style === "Hat") {
     return `<svg viewBox="0 0 176 420" aria-hidden="true">
-      <ellipse cx="88" cy="62" rx="32" ry="8" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
-      <path d="M62 60 L114 60 L106 38 L70 38 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <ellipse cx="88" cy="30" rx="32" ry="8" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M62 28 L114 28 L106 8 L70 8 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
     </svg>`;
   }
 
   if (item.style === "Sunglasses") {
     return `<svg viewBox="0 0 176 420" aria-hidden="true">
-      <rect x="58" y="70" width="22" height="12" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
-      <rect x="96" y="70" width="22" height="12" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
-      <path d="M80 76 L96 76" stroke="${stroke}" stroke-width="2"/>
+      <path d="M80 36 L96 36" stroke="${stroke}" stroke-width="2"/>
+      <rect x="69" y="30" width="16" height="10" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <rect x="91" y="30" width="16" height="10" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
     </svg>`;
   }
 
   if (item.style === "Scarf") {
     return `<svg viewBox="0 0 176 420" aria-hidden="true">
-      <path d="M72 88 C78 84, 98 84, 104 88 C100 102, 76 102, 72 88 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
-      <path d="M78 94 L84 170 L96 170 L92 94" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M72 72 L78 154 L90 154 L86 72" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M72 72 C78 68, 98 68, 104 72 C100 86, 76 86, 72 72 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
     </svg>`;
   }
 
@@ -1619,18 +1741,34 @@ function buildSkirtSvg(item, fill, stroke, waistY) {
   };
   const skirtLength = lengthMap[item.skirtLength || "Knee"];
   const bottomY = waistY + skirtLength;
+  const hipY = waistY + 34;
+  const isMiniTrumpet = item.style === "Trumpet" && item.skirtLength === "Mini";
+  const trumpetHipY = isMiniTrumpet ? waistY + 24 : hipY;
+  const trumpetNarrowY = Math.round(waistY + skirtLength * (isMiniTrumpet ? 0.62 : 0.68));
+  const trumpetPath = isMiniTrumpet
+    ? `M58 ${waistY} L118 ${waistY} C128 ${waistY + 10}, 130 ${trumpetHipY}, 126 ${trumpetHipY} C125 ${trumpetNarrowY - 6}, 124 ${trumpetNarrowY}, 124 ${trumpetNarrowY} C128 ${trumpetNarrowY + 9}, 134 ${bottomY - 4}, 138 ${bottomY} L38 ${bottomY} C42 ${bottomY - 4}, 48 ${trumpetNarrowY + 9}, 52 ${trumpetNarrowY} C52 ${trumpetNarrowY}, 51 ${trumpetNarrowY - 6}, 50 ${trumpetHipY} C46 ${trumpetHipY}, 48 ${waistY + 10}, 58 ${waistY} Z`
+    : `M58 ${waistY} L118 ${waistY} C128 ${waistY + 12}, 136 ${trumpetHipY}, 132 ${trumpetHipY} C130 ${trumpetNarrowY - 8}, 126 ${trumpetNarrowY}, 124 ${trumpetNarrowY} C132 ${trumpetNarrowY + 12}, 142 ${bottomY - 6}, 146 ${bottomY} L30 ${bottomY} C34 ${bottomY - 6}, 44 ${trumpetNarrowY + 12}, 52 ${trumpetNarrowY} C50 ${trumpetNarrowY}, 46 ${trumpetNarrowY - 8}, 44 ${trumpetHipY} C40 ${trumpetHipY}, 48 ${waistY + 12}, 58 ${waistY} Z`;
+  const tierOneY = Math.round(waistY + skirtLength * 0.34);
+  const tierTwoY = Math.round(waistY + skirtLength * 0.66);
+  const tieredPath = `M58 ${waistY} L118 ${waistY} C126 ${tierOneY - 8}, 132 ${tierOneY}, 132 ${tierOneY} L142 ${tierTwoY} L154 ${bottomY} L22 ${bottomY} L34 ${tierTwoY} L44 ${tierOneY} C44 ${tierOneY}, 50 ${tierOneY - 8}, 58 ${waistY} Z`;
+  const tieredLines = `
+    <path d="M44 ${tierOneY} C62 ${tierOneY + 5}, 114 ${tierOneY + 5}, 132 ${tierOneY}" fill="none" stroke="${stroke}" stroke-width="2"/>
+    <path d="M34 ${tierTwoY} C58 ${tierTwoY + 6}, 118 ${tierTwoY + 6}, 142 ${tierTwoY}" fill="none" stroke="${stroke}" stroke-width="2"/>
+  `;
+  const asymmetricalTopY = waistY;
+  const asymmetricalBottomY = bottomY;
 
   const stylePaths = {
-    "A-Line": `M58 ${waistY} L118 ${waistY} L128 ${bottomY} L48 ${bottomY} Z`,
-    Pencil: `M64 ${waistY} L112 ${waistY} L108 ${bottomY} L68 ${bottomY} Z`,
-    Trumpet: `M62 ${waistY} L114 ${waistY} L104 ${bottomY - 18} L124 ${bottomY} L52 ${bottomY} L72 ${bottomY - 18} Z`,
-    Sarong: `M58 ${waistY} L118 ${waistY} L103 ${bottomY} L57 ${bottomY} Z`,
-    Tiered: `M58 ${waistY} L118 ${waistY} L122 ${bottomY - 32} L114 ${bottomY - 18} L126 ${bottomY} L50 ${bottomY} L62 ${bottomY - 18} L54 ${bottomY - 32} Z`,
+    "A-Line": `M62 ${waistY} L114 ${waistY} L144 ${bottomY} L32 ${bottomY} Z`,
+    Pencil: `M56 ${waistY} L120 ${waistY} L130 ${hipY} L126 ${bottomY} L50 ${bottomY} L46 ${hipY} Z`,
+    Trumpet: trumpetPath,
+    Tiered: tieredPath,
     Wrap: `M58 ${waistY} L118 ${waistY} L100 ${bottomY} L56 ${bottomY} Z`,
-    Asymmetrical: `M58 ${waistY} L118 ${waistY} L106 ${bottomY - 28} L66 ${bottomY} Z`,
+    Asymmetrical: `M56 ${asymmetricalTopY} L120 ${asymmetricalTopY} L134 ${asymmetricalBottomY - 34} L36 ${asymmetricalBottomY + 24} Z`,
   };
 
-  return `<path d="${stylePaths[item.style] || stylePaths["A-Line"]}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  const skirtPath = `<path d="${stylePaths[item.style] || stylePaths["A-Line"]}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+  return item.style === "Tiered" ? `${skirtPath}${tieredLines}` : skirtPath;
 }
 
 function buildShortsSvg(item, fill, stroke, waistY) {
@@ -1643,15 +1781,15 @@ function buildShortsSvg(item, fill, stroke, waistY) {
     Knee: 96,
     Gym: 54,
   };
-  const hemY = waistY + (lengthMap[item.style] || 64);
+  const hemY = 210 + (lengthMap[item.style] || 64);
   if (item.style === "Skort") {
-    return `<path d="M68 ${waistY} L108 ${waistY} L116 ${hemY} L60 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/><path d="M88 ${waistY} L84 ${hemY}" stroke="${stroke}" stroke-width="2"/>`;
+    return `<path d="M46 ${waistY} L130 ${waistY} L136 ${hemY} L40 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/><path d="M88 ${waistY} L84 ${hemY}" stroke="${stroke}" stroke-width="2"/>`;
   }
   const pockets = item.style === "Cargo"
-    ? `<rect x="62" y="${waistY + 24}" width="10" height="16" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/><rect x="104" y="${waistY + 24}" width="10" height="16" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+    ? `<rect x="52" y="${waistY + 36}" width="13" height="18" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/><rect x="111" y="${waistY + 36}" width="13" height="18" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
     : "";
   return `
-    <path d="M68 ${waistY} L108 ${waistY} L103 ${hemY} L93 ${hemY} L88 ${hemY - 10} L83 ${hemY} L73 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    <path d="M46 ${waistY} L130 ${waistY} L124 ${hemY} L100 ${hemY} L88 ${hemY - 14} L76 ${hemY} L52 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
     <path d="M88 ${waistY} L88 ${hemY - 10}" stroke="${stroke}" stroke-width="2"/>
     ${pockets}
   `;
@@ -1851,7 +1989,34 @@ function persistObject(key, value) {
 function describeItem(item) {
   const materialNote = item.material ? ` in ${item.material.toLowerCase()}` : "";
   const patternNote = item.pattern ? ` with a ${item.pattern.toLowerCase()} pattern` : "";
-  return `${item.name} in ${item.color}${patternNote}, tagged ${item.theme.toLowerCase()} with a ${describeStyle(item).toLowerCase()} silhouette${materialNote}.`;
+  const garmentLabel = describeGarmentLabel(item);
+  const displayType = item.type === "Shorts" ? "shorts" : item.type.toLowerCase();
+  const normalizedName = normalizeDescriptionText(item.name);
+  const lengthAlreadyNamed = item.skirtLength && normalizedName.includes(normalizeDescriptionText(item.skirtLength));
+  const skirtLengthLabel = item.skirtLength && !lengthAlreadyNamed ? ` ${item.skirtLength}` : "";
+  const displayName = item.type === "Pants" && !normalizedName.includes("pants")
+    ? `${item.name} Pants`
+    : item.type === "Skirts" && !normalizedName.includes("skirt")
+      ? `${item.name}${skirtLengthLabel} Skirt`
+      : item.type === "Skirts" && item.skirtLength && !lengthAlreadyNamed
+        ? `${item.name} (${item.skirtLength})`
+      : item.name;
+  const colorAlreadyNamed = normalizedName.includes(normalizeDescriptionText(item.color));
+  const styleAlreadyNamed = normalizedName.includes(normalizeDescriptionText(item.style));
+  const summaryParts = [
+    colorAlreadyNamed ? "" : item.color,
+    styleAlreadyNamed ? "" : garmentLabel,
+  ].filter(Boolean);
+  const detailNotes = [
+    patternNote,
+    item.theme ? ` tagged ${item.theme.toLowerCase()}` : "",
+    materialNote,
+  ].filter(Boolean).join(",");
+  const summary = summaryParts.length
+    ? `${displayName}: ${summaryParts.join(" ")}.`
+    : `${displayName}.`;
+
+  return `${summary} Displayed as ${displayType}${detailNotes}.`;
 }
 
 function describeStyle(item) {
@@ -1860,6 +2025,23 @@ function describeStyle(item) {
   if (item.sleeveLength) styleNotes.push(item.sleeveLength);
   if (item.jewelryType) styleNotes.push(item.jewelryType);
   return styleNotes.length > 1 ? `${styleNotes[0]} (${styleNotes.slice(1).join(", ")})` : styleNotes[0];
+}
+
+function describeGarmentLabel(item) {
+  const details = [];
+  if (item.skirtLength) details.push(`${item.skirtLength.toLowerCase()} length`);
+  if (item.sleeveLength) details.push(item.sleeveLength.toLowerCase());
+  if (item.jewelryType) details.push(item.jewelryType.toLowerCase());
+
+  const detailText = details.length ? ` (${details.join(", ")})` : "";
+  return `${item.style.toLowerCase()}${detailText}`;
+}
+
+function normalizeDescriptionText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function colorForItem(colorName, fallback) {
