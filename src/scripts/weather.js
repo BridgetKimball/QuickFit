@@ -1,7 +1,3 @@
-const WEATHER_PROXY_URL = window.QUICKFIT_WEATHER_PROXY_URL || "/api/weather";
-const OPENWEATHER_CURRENT_URL = "https://api.openweathermap.org/data/2.5/weather";
-const OPENWEATHER_FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast";
-
 export {
   buildWeatherErrorMessage,
   fetchCurrentWeather,
@@ -31,20 +27,19 @@ async function fetchForecastWeather(latitude, longitude) {
   return fetchWeatherData("forecast", latitude, longitude);
 }
 
+// The weather proxy lives on the same Cloudflare Worker as photo analysis and accounts
+// (see worker/src/routes/weather.js) — it keeps the OpenWeather key server-side and
+// avoids the browser needing to reach api.openweathermap.org directly (which real
+// visitors' ad blockers/privacy extensions can silently block).
 async function fetchWeatherData(type, latitude, longitude) {
-  try {
-    return await fetchWeatherFromProxy(type, latitude, longitude);
-  } catch (error) {
-    if (!error?.proxyUnavailable) {
-      throw error;
-    }
-
-    return fetchWeatherDirect(type, latitude, longitude);
+  const base = resolveWeatherProxyBase();
+  if (!base) {
+    const error = new Error("QuickFit's weather service isn't configured for this deployment yet.");
+    error.missingProxy = true;
+    throw error;
   }
-}
 
-async function fetchWeatherFromProxy(type, latitude, longitude) {
-  const url = new URL(WEATHER_PROXY_URL, window.location.origin);
+  const url = new URL(`${base}/weather`);
   url.searchParams.set("type", type);
   url.searchParams.set("lat", latitude);
   url.searchParams.set("lon", longitude);
@@ -59,120 +54,26 @@ async function fetchWeatherFromProxy(type, latitude, longitude) {
     let message = `Weather request failed with status ${response.status}`;
     try {
       const errorPayload = await response.json();
-      if (errorPayload?.message) {
-        message = errorPayload.message;
+      if (errorPayload?.error) {
+        message = errorPayload.error;
       }
     } catch (_error) {
-      // Keep default message if payload is not JSON.
+      // Keep the default message if the error body isn't JSON.
     }
 
     const error = new Error(message);
     error.status = response.status;
-    if (response.status === 404 || response.status === 503) {
-      error.proxyUnavailable = true;
-    }
     throw error;
   }
 
   return response.json();
 }
 
-async function fetchWeatherDirect(type, latitude, longitude) {
-  const apiKey = readWeatherApiKey();
-
-  if (!apiKey) {
-    const error = new Error("OpenWeather API key is not configured for this deployment");
-    error.missingClientKey = true;
-    throw error;
-  }
-
-  const upstreamUrl = new URL(type === "forecast" ? OPENWEATHER_FORECAST_URL : OPENWEATHER_CURRENT_URL);
-  upstreamUrl.searchParams.set("lat", String(latitude));
-  upstreamUrl.searchParams.set("lon", String(longitude));
-  upstreamUrl.searchParams.set("units", "imperial");
-  upstreamUrl.searchParams.set("appid", apiKey);
-
-  const response = await fetch(upstreamUrl.toString(), {
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    const error = new Error(`OpenWeather request failed with status ${response.status}`);
-    error.status = response.status;
-    throw error;
-  }
-
-  return response.json();
-}
-
-function readWeatherApiKey() {
-  const runtimeKey =
-    typeof window.QUICKFIT_OPENWEATHER_API_KEY === "string"
-      ? window.QUICKFIT_OPENWEATHER_API_KEY.trim()
-      : "";
-
-  return runtimeKey;
-}
-
-function applyCurrentWeatherDefaults(weatherData, forecastData, selectedDate) {
-  const temperature = Math.round(weatherData.main.temp);
-  const dayEntries = forecastData?.list?.filter((entry) => isSameForecastDay(entry.dt, selectedDate)) || [];
-  const forecastHigh = dayEntries.length
-    ? Math.max(...dayEntries.map((entry) => entry.main.temp_max))
-    : weatherData.main.temp_max;
-  const forecastLow = dayEntries.length
-    ? Math.min(...dayEntries.map((entry) => entry.main.temp_min))
-    : weatherData.main.temp_min;
-  const highTemperature = Math.round(Math.max(weatherData.main.temp, forecastHigh));
-  const lowTemperature = Math.round(Math.min(weatherData.main.temp, forecastLow));
-  const weatherCategory = mapWeatherCondition(
-    weatherData.weather?.[0]?.main,
-    weatherData.weather?.[0]?.description,
-    weatherData.wind?.speed
-  );
-  const season = detectSeason(new Date((weatherData.dt + weatherData.timezone) * 1000));
-  const locationName = weatherData.name || "your area";
-  const conditionLabel = weatherData.weather?.[0]?.description || weatherData.weather?.[0]?.main || weatherCategory;
-
-  elements.temperature.value = String(temperature);
-  elements.temperatureValue.textContent = `${temperature}°F`;
-  elements.weatherSelect.value = weatherCategory;
-  elements.season.value = season;
-  elements.weatherStatus.textContent = `Using current weather for ${locationName}:\nHigh of ${highTemperature}°F and Low of ${lowTemperature}°F and ${formatWeatherSummary(conditionLabel)}.`;
-  generateRecommendation(getPlannerState());
-}
-
-function applyForecastWeatherDefaults(forecastData, selectedDate) {
-  const dayEntries = forecastData.list.filter((entry) => isSameForecastDay(entry.dt, selectedDate));
-  if (!dayEntries.length) {
-    const error = new Error("Forecast unavailable for selected date");
-    error.forecastUnavailable = true;
-    throw error;
-  }
-
-  const representativeEntry = selectRepresentativeForecastEntry(dayEntries);
-  const highTemperature = Math.round(Math.max(...dayEntries.map((entry) => entry.main.temp_max)));
-  const lowTemperature = Math.round(Math.min(...dayEntries.map((entry) => entry.main.temp_min)));
-  const temperature = Math.round(representativeEntry.main.temp);
-  const weatherCategory = mapWeatherCondition(
-    representativeEntry.weather?.[0]?.main,
-    representativeEntry.weather?.[0]?.description,
-    representativeEntry.wind?.speed
-  );
-  const timezoneOffset = forecastData.city?.timezone || 0;
-  const season = detectSeason(new Date((representativeEntry.dt + timezoneOffset) * 1000));
-  const locationName = forecastData.city?.name || "your area";
-  const conditionLabel =
-    representativeEntry.weather?.[0]?.description || representativeEntry.weather?.[0]?.main || weatherCategory;
-
-  elements.temperature.value = String(temperature);
-  elements.temperatureValue.textContent = `${temperature}°F`;
-  elements.weatherSelect.value = weatherCategory;
-  elements.season.value = season;
-  elements.weatherStatus.textContent = `Using forecast weather for ${locationName} on ${formatDisplayDate(selectedDate)}:\nHigh of ${highTemperature}°F and Low of ${lowTemperature}°F and ${formatWeatherSummary(conditionLabel)}.`;
-  generateRecommendation(getPlannerState());
+function resolveWeatherProxyBase() {
+  const endpoint = typeof window.QUICKFIT_PHOTO_ANALYSIS_ENDPOINT === "string"
+    ? window.QUICKFIT_PHOTO_ANALYSIS_ENDPOINT.trim()
+    : "";
+  return endpoint.replace(/\/$/, "");
 }
 
 function isSameForecastDay(unixSeconds, selectedDate) {
@@ -227,15 +128,11 @@ function buildWeatherErrorMessage(error) {
   }
 
   if (error?.status === 401) {
-    return "Weather service authentication failed. Check the server-side OpenWeather API key configuration.";
+    return "Weather service authentication failed. Check the worker's OPENWEATHER_API_KEY secret.";
   }
 
-  if (error?.missingClientKey) {
-    return "Weather is not configured for this deployment. Set OPENWEATHER_API_KEY in GitHub Actions or your serverless host.";
-  }
-
-  if (error?.proxyUnavailable) {
-    return "The weather proxy is unavailable right now. QuickFit is using the deployment key fallback if available.";
+  if (error?.missingProxy) {
+    return "Weather isn't configured for this deployment. Set PHOTO_ANALYSIS_ENDPOINT (the worker URL) in GitHub Actions.";
   }
 
   if (error?.status === 429) {
@@ -243,7 +140,7 @@ function buildWeatherErrorMessage(error) {
   }
 
   if (error?.forecastUnavailable) {
-    return "OpenWeather forecast data is only available for the next 5 days in this app, so QuickFit could not fill weather for that date.";
+    return "Forecast data wasn't available for that date, so QuickFit could not fill in the weather automatically.";
   }
 
   return "QuickFit could not load current weather right now, so the planner is using manual defaults.";

@@ -3,10 +3,16 @@ main = "src/index.js"
 compatibility_date = "2026-08-01"
 
 # Restrict CORS to your deployed QuickFit origin (e.g. "https://bridgetkimball.github.io").
-# Using "*" here would let ANY website call your worker and spend your Gemini quota.
+# Using "*" here would let ANY website call your worker and spend your Gemini/OpenWeather quota.
 [vars]
 ALLOWED_ORIGIN = "https://bridgetkimball.github.io"
 GEMINI_MODEL = "gemini-flash-latest"
 
-# Set the real secret with:
+# Set the real secrets with:
 #   wrangler secret put GEMINI_API_KEY
+#   wrangler secret put OPENWEATHER_API_KEY
+
+[[d1_databases]]
+binding = "DB"
+database_name = "quickfit-db"
+database_id = "32d3a01c-8ba5-49e1-9b08-bf2faac2d3af"

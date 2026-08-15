@@ -14,9 +14,37 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap"
       rel="stylesheet"
     >
-    <link rel="stylesheet" href="./src/styles/styles.css?v=20260407">
+    <link rel="stylesheet" href="./src/styles/styles.css">
   </head>
   <body>
+    <div class="app-modal is-hidden" id="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-gate-title">
+      <div class="app-modal__backdrop"></div>
+      <div class="app-modal__panel">
+        <p class="eyebrow" id="auth-gate-eyebrow">Welcome to QuickFit</p>
+        <h2 id="auth-gate-title">Log in</h2>
+        <p>Your closet is saved to your account now, so it won't disappear if your browser cache clears.</p>
+        <form id="auth-form" class="control-form">
+          <label>
+            Email
+            <input type="email" name="email" id="auth-email" required autocomplete="email">
+          </label>
+          <label>
+            Password
+            <input type="password" name="password" id="auth-password" required minlength="8" autocomplete="current-password">
+          </label>
+          <label id="auth-confirm-field" class="conditional-field is-hidden">
+            Confirm password
+            <input type="password" name="confirmPassword" id="auth-confirm-password" autocomplete="new-password">
+          </label>
+          <p class="auth-gate__status" id="auth-status" role="status" aria-live="polite"></p>
+          <button class="button button--primary" type="submit" id="auth-submit">Log In</button>
+        </form>
+        <button class="button button--ghost button--small" type="button" id="auth-mode-toggle">
+          Don't have an account? Sign up
+        </button>
+      </div>
+    </div>
+
     <div class="page-shell">
       <header class="hero">
         <div class="hero__content">
@@ -35,7 +63,7 @@
               </p>
             </div>
           </div>
-          <div class="hero__actions">
+          <!-- <div class="hero__actions">
             <button
               class="button button--primary"
               type="button"
@@ -50,7 +78,7 @@
             >
               Manage Closet
             </button>
-          </div>
+          </div> -->
           <div class="hero__metrics">
             <article>
               <strong>Fast mornings</strong>
@@ -95,76 +123,114 @@
               <h2>Set today’s conditions</h2>
             </div>
 
-            <form id="planner-form" class="control-form">
-              <label>
-                Outfit date
-                <input id="outfit-date" name="outfitDate" type="date">
-              </label>
-
-              <label>
-                Temperature
-                <span class="range-row">
-                  <input
-                    id="temperature"
-                    name="temperature"
-                    type="range"
-                    min="20"
-                    max="100"
-                    value="68"
-                  >
-                  <span id="temperature-value">68°F</span>
-                </span>
-              </label>
-
-              <label>
-                Weather
-                <select name="weather" id="weather">
-                  <option value="sunny">Sunny</option>
-                  <option value="cloudy">Cloudy</option>
-                  <option value="rainy">Rainy</option>
-                  <option value="windy">Windy</option>
-                  <option value="snowy">Snowy</option>
-                </select>
-              </label>
-
-              <div class="weather-defaults">
-                <p class="weather-defaults__status" id="weather-status">
-                  Checking your local weather for the default planner values.
-                </p>
-                <button
-                  class="button button--ghost button--small"
-                  id="refresh-weather"
-                  type="button"
-                >
-                  Use My Current Weather
-                </button>
-              </div>
-
-              <label>
-                Season
-                <select name="season" id="season"></select>
-              </label>
-
-              <label>
-                Theme for the day
-                <select name="theme" id="theme">
-                  <option value="Casual">Casual</option>
-                  <option value="Business-Casual">Business-Casual</option>
-                  <option value="Formal">Formal</option>
-                  <option value="Semi-formal">Semi-formal</option>
-                  <option value="Professional">Professional</option>
-                </select>
-              </label>
-
-              <label>
-                Style energy
-                <select name="stylePreference" id="stylePreference"></select>
-              </label>
-
-              <button class="button button--primary" type="submit">
-                Generate Recommendation
+            <div class="planner-subtabs" role="tablist" aria-label="Recommendation mode">
+              <button class="planner-subtab-link is-active" type="button" data-planner-tab="day">
+                Day Overview
               </button>
-            </form>
+              <button class="planner-subtab-link" type="button" data-planner-tab="hourly">
+                Hourly
+              </button>
+            </div>
+
+            <div class="planner-subtab-panel is-active" id="planner-day-panel">
+              <form id="planner-form" class="control-form">
+                <label>
+                  Outfit date
+                  <input id="outfit-date" name="outfitDate" type="date">
+                </label>
+
+                <label>
+                  Temperature
+                  <span class="range-row">
+                    <input
+                      id="temperature"
+                      name="temperature"
+                      type="range"
+                      min="20"
+                      max="100"
+                      value="68"
+                    >
+                    <span id="temperature-value">68°F</span>
+                  </span>
+                </label>
+
+                <label>
+                  Weather
+                  <select name="weather" id="weather">
+                    <option value="sunny">Sunny</option>
+                    <option value="cloudy">Cloudy</option>
+                    <option value="rainy">Rainy</option>
+                    <option value="windy">Windy</option>
+                    <option value="snowy">Snowy</option>
+                  </select>
+                </label>
+
+                <div class="weather-defaults">
+                  <p class="weather-defaults__status" id="weather-status">
+                    Checking your local weather for the default planner values.
+                  </p>
+                  <button
+                    class="button button--ghost button--small"
+                    id="refresh-weather"
+                    type="button"
+                  >
+                    Use My Current Weather
+                  </button>
+                </div>
+
+                <label>
+                  Season
+                  <select name="season" id="season"></select>
+                </label>
+
+                <label>
+                  Theme for the day
+                  <select name="theme" id="theme">
+                    <option value="Casual">Casual</option>
+                    <option value="Business-Casual">Business-Casual</option>
+                    <option value="Formal">Formal</option>
+                    <option value="Semi-formal">Semi-formal</option>
+                    <option value="Professional">Professional</option>
+                  </select>
+                </label>
+
+                <label>
+                  Style energy
+                  <select name="stylePreference" id="stylePreference"></select>
+                </label>
+
+                <button class="button button--primary" type="submit">
+                  Generate Recommendation
+                </button>
+              </form>
+            </div>
+
+            <div class="planner-subtab-panel is-hidden" id="planner-hourly-panel">
+              <form id="hourly-planner-form" class="control-form">
+                <label>
+                  Outfit date
+                  <input id="hourly-outfit-date" type="date">
+                </label>
+
+                <p class="weather-defaults__status" id="hourly-weather-status">
+                  Pick a date to load that day's 3-hour forecast slots.
+                </p>
+
+                <label>
+                  Time
+                  <select id="hourly-slot" disabled></select>
+                </label>
+
+                <p class="field-hint">
+                  Uses the same 3-hour forecast steps as the Day Overview tab's weather —
+                  pick whichever slot is closest to the time you're planning for.
+                </p>
+
+                <button class="button button--primary" type="submit">
+                  Generate Recommendation
+                </button>
+              </form>
+            </div>
           </article>
 
           <article class="panel panel--recommendation">
@@ -251,10 +317,19 @@
               <div class="photo-upload__header">
                 <p class="eyebrow">Faster entry</p>
                 <h3>Add from a photo</h3>
-                <p>
+                <div class="photo-upload__modes" role="group" aria-label="Photo type">
+                  <button type="button" class="photo-mode-btn is-active" id="photo-mode-single" data-mode="single">Single item</button>
+                  <button type="button" class="photo-mode-btn" id="photo-mode-closet" data-mode="closet">Whole closet</button>
+                </div>
+                <p id="photo-upload-description">
                   Upload a picture of the item and QuickFit will suggest the fields below
                   for you to review before saving.
                 </p>
+                <ul class="photo-upload__specs" id="photo-upload-specs">
+                  <li>One clothing item per photo</li>
+                  <li>Laid flat, on a hanger, or on a mannequin &mdash; not worn by a person</li>
+                  <li>Good lighting, plain background, item fills most of the frame</li>
+                </ul>
               </div>
               <div class="photo-upload__row">
                 <label class="photo-upload__control">
@@ -262,6 +337,16 @@
                   <span class="button button--ghost button--small">Choose Photo</span>
                 </label>
                 <span class="photo-upload__status" id="photo-upload-status"></span>
+              </div>
+              <div class="photo-upload__progress is-hidden" id="photo-upload-progress">
+                <div class="photo-upload__progress-fill" id="photo-upload-progress-bar"></div>
+              </div>
+              <div class="photo-queue is-hidden" id="photo-queue">
+                <span class="photo-queue__label" id="photo-queue-label"></span>
+                <div class="photo-queue__actions">
+                  <button type="button" class="button button--ghost button--small" id="photo-queue-skip">Skip This Item</button>
+                  <button type="button" class="button button--ghost button--small" id="photo-queue-stop">Stop Reviewing</button>
+                </div>
               </div>
               <div class="photo-upload__preview is-hidden" id="photo-upload-preview">
                 <img id="photo-upload-thumb" alt="Uploaded clothing preview">
@@ -285,10 +370,25 @@
                     >
                   </label>
                 </div>
-                <label>
-                  Pattern
-                  <input type="text" name="pattern" placeholder="Optional">
-                </label>
+                <div class="field-stack">
+                  <label>
+                    Pattern
+                    <select name="patternType" id="pattern-type">
+                      <option value="Solid">Solid / no pattern</option>
+                      <option value="Stripes">Stripes</option>
+                      <option value="Polka Dot">Polka dot</option>
+                      <option value="Plaid">Plaid / check</option>
+                      <option value="Floral">Floral</option>
+                      <option value="Chevron">Chevron / herringbone</option>
+                      <option value="Other">Other (type your own)</option>
+                    </select>
+                  </label>
+                  <label id="pattern-custom-field" class="conditional-field is-hidden">
+                    Describe the pattern
+                    <input type="text" name="patternCustom" id="patternCustom" placeholder="e.g. camo, argyle, animal print">
+                  </label>
+                  <p class="field-hint" id="pattern-hint"></p>
+                </div>
               </div>
 
               <div class="form-row">
@@ -323,6 +423,16 @@
                     <option value="Floor">Floor length</option>
                   </select>
                 </label>
+                <label id="dress-length-field" class="conditional-field is-hidden">
+                  Dress length
+                  <select name="dressLength" id="dressLength">
+                    <option value="">Select dress length</option>
+                    <option value="Mini">Mini length</option>
+                    <option value="Knee">Knee length</option>
+                    <option value="Midi">Midi length</option>
+                    <option value="Floor">Floor length</option>
+                  </select>
+                </label>
                 <label id="sleeve-length-field" class="conditional-field is-hidden">
                   Sleeve length
                   <select name="sleeveLength" id="sleeveLength">
@@ -348,7 +458,7 @@
                 <input type="text" name="material" placeholder="Optional">
               </label>
 
-              <button class="button button--primary" type="submit">
+              <button class="button button--primary" type="submit" id="closet-save-button">
                 Save to Closet
               </button>
             </form>
@@ -436,6 +546,20 @@
                 Clear All Data
               </button>
             </div>
+
+            <div class="danger-zone">
+              <div class="danger-zone__header">
+                <p class="eyebrow">Danger zone</p>
+                <h3>Delete account</h3>
+                <p>
+                  Permanently deletes your QuickFit account, login, closet, and saved
+                  outfits. This can't be undone.
+                </p>
+              </div>
+              <button class="button button--danger" id="delete-account" type="button">
+                Delete Account
+              </button>
+            </div>
           </article>
 
           <article class="panel panel--profile-summary">
@@ -444,6 +568,11 @@
               <h2>Profile summary</h2>
             </div>
             <div id="profile-summary" class="profile-summary"></div>
+
+            <div class="account-info">
+              <p id="account-email"></p>
+              <button class="button button--ghost button--small" id="log-out" type="button">Log Out</button>
+            </div>
 
             <div class="saved-outfits">
               <div class="panel__header saved-outfits__header">
@@ -521,6 +650,6 @@
     </div>
 
     <script src="./src/scripts/runtime-config.js"></script>
-    <script type="module" src="./src/scripts/script.js?v=20260410"></script>
+    <script type="module" src="./src/scripts/script.js"></script>
   </body>
 </html>

@@ -1,6 +1,8 @@
 import {
+  detectClothingPatternType,
   renderAccessorySvg,
   renderBottomSvg,
+  renderDressSvg,
   renderLayerSvg,
   renderShoesSvg,
   renderTopSvg,
@@ -18,11 +20,15 @@ import {
   selectRepresentativeForecastEntry,
 } from "./weather.js";
 
+// closet/profile/favoriteOutfits keys are no longer the source of truth (the API is) —
+// they're only read from for the one-time legacy-data import offered after first login.
 const STORAGE_KEYS = {
   closet: "quickfit-closet",
   profile: "quickfit-profile",
   lastLocation: "quickfit-last-location",
   favoriteOutfits: "quickfit-favorite-outfits",
+  authToken: "quickfit-auth-token",
+  importPrompted: "quickfit-import-prompted",
 };
 
 const clothingStyles = {
@@ -60,6 +66,16 @@ const clothingStyles = {
     "Trumpet",
     "Tiered",
     "Asymmetrical",
+  ],
+  Dresses: [
+    "Sundress",
+    "Maxi dress",
+    "Slip dress",
+    "Wrap dress",
+    "Shift dress",
+    "Shirt dress",
+    "Sweater dress",
+    "Cocktail dress",
   ],
   Sweaters: [
     "Crewneck",
@@ -129,7 +145,7 @@ const colorOptions = [
 ];
 
 const typeGroups = {
-  top: ["Shirts", "Sweaters"],
+  top: ["Shirts", "Sweaters", "Dresses"],
   bottom: ["Skirts", "Shorts", "Pants"],
   layer: ["Jackets", "Accessories"],
   jacket: ["Jackets"],
@@ -155,25 +171,13 @@ const defaultProfile = {
   presentation: "Unspecified",
 };
 
-const defaultCloset = [];
-const legacySeedClosets = [
-  [
-    "Forest weekend tee",
-    "Cream straight trousers",
-    "Olive bomber layer",
-  ],
-  [
-    "Forest knit tee",
-    "Tailored cream trousers",
-    "Olive cropped jacket",
-  ],
-];
-
+// Populated post-login by hydrateStateFromApi() — the server is the source of truth now,
+// so there's nothing to read from localStorage here anymore.
 const state = {
-  closet: normalizeInitialCloset(loadCollection(STORAGE_KEYS.closet, defaultCloset)),
-  profile: normalizeProfile(loadObject(STORAGE_KEYS.profile, defaultProfile)),
+  closet: [],
+  profile: { ...defaultProfile },
   weatherLocation: null,
-  favoriteOutfits: loadCollection(STORAGE_KEYS.favoriteOutfits, []),
+  favoriteOutfits: [],
   currentRecommendation: null,
   lastWeatherMismatchAlertKey: "",
   mannequinControls: {
@@ -192,6 +196,13 @@ const elements = {
   navButtons: document.querySelectorAll(".section-nav__link"),
   heroNavButtons: document.querySelectorAll("[data-nav-target]"),
   plannerForm: document.querySelector("#planner-form"),
+  plannerSubtabButtons: document.querySelectorAll("[data-planner-tab]"),
+  plannerDayPanel: document.querySelector("#planner-day-panel"),
+  plannerHourlyPanel: document.querySelector("#planner-hourly-panel"),
+  hourlyPlannerForm: document.querySelector("#hourly-planner-form"),
+  hourlyOutfitDate: document.querySelector("#hourly-outfit-date"),
+  hourlyWeatherStatus: document.querySelector("#hourly-weather-status"),
+  hourlySlotSelect: document.querySelector("#hourly-slot"),
   outfitDate: document.querySelector("#outfit-date"),
   stylePreferenceSelect: document.querySelector("#stylePreference"),
   temperature: document.querySelector("#temperature"),
@@ -216,11 +227,17 @@ const elements = {
   styleSelect: document.querySelector("#style"),
   skirtLengthField: document.querySelector("#skirt-length-field"),
   skirtLengthSelect: document.querySelector("#skirtLength"),
+  dressLengthField: document.querySelector("#dress-length-field"),
+  dressLengthSelect: document.querySelector("#dressLength"),
   sleeveLengthField: document.querySelector("#sleeve-length-field"),
   sleeveLengthSelect: document.querySelector("#sleeveLength"),
   colorSelect: document.querySelector("#color"),
   customColorField: document.querySelector("#custom-color-field"),
   customColorInput: document.querySelector("#customColor"),
+  patternTypeSelect: document.querySelector("#pattern-type"),
+  patternCustomField: document.querySelector("#pattern-custom-field"),
+  patternCustomInput: document.querySelector("#patternCustom"),
+  patternHint: document.querySelector("#pattern-hint"),
   jewelryField: document.querySelector("#jewelry-field"),
   jewelryTypeSelect: document.querySelector("#jewelryType"),
   closetThemeField: document.querySelector("#closet-theme-field"),
@@ -237,6 +254,7 @@ const elements = {
   shoesRecommendation: document.querySelector("#shoes-recommendation"),
   resetProfileButton: document.querySelector("#reset-profile"),
   clearAllDataButton: document.querySelector("#clear-all-data"),
+  deleteAccountButton: document.querySelector("#delete-account"),
   savedOutfitsList: document.querySelector("#saved-outfits-list"),
   appAlert: document.querySelector("#app-alert"),
   appAlertEyebrow: document.querySelector("#app-alert-eyebrow"),
@@ -254,10 +272,60 @@ const elements = {
   photoUploadStatus: document.querySelector("#photo-upload-status"),
   photoUploadPreview: document.querySelector("#photo-upload-preview"),
   photoUploadThumb: document.querySelector("#photo-upload-thumb"),
+  photoUploadProgress: document.querySelector("#photo-upload-progress"),
+  photoUploadProgressBar: document.querySelector("#photo-upload-progress-bar"),
+  photoModeSingleButton: document.querySelector("#photo-mode-single"),
+  photoModeClosetButton: document.querySelector("#photo-mode-closet"),
+  photoUploadDescription: document.querySelector("#photo-upload-description"),
+  photoUploadSpecs: document.querySelector("#photo-upload-specs"),
+  photoQueue: document.querySelector("#photo-queue"),
+  photoQueueLabel: document.querySelector("#photo-queue-label"),
+  photoQueueSkipButton: document.querySelector("#photo-queue-skip"),
+  photoQueueStopButton: document.querySelector("#photo-queue-stop"),
+  closetSaveButton: document.querySelector("#closet-save-button"),
+  authGate: document.querySelector("#auth-gate"),
+  authGateTitle: document.querySelector("#auth-gate-title"),
+  authForm: document.querySelector("#auth-form"),
+  authEmailInput: document.querySelector("#auth-email"),
+  authPasswordInput: document.querySelector("#auth-password"),
+  authConfirmField: document.querySelector("#auth-confirm-field"),
+  authConfirmInput: document.querySelector("#auth-confirm-password"),
+  authStatus: document.querySelector("#auth-status"),
+  authSubmit: document.querySelector("#auth-submit"),
+  authModeToggle: document.querySelector("#auth-mode-toggle"),
+  accountEmail: document.querySelector("#account-email"),
+  logOutButton: document.querySelector("#log-out"),
 };
 
 let pendingModalConfirm = null;
 let pendingClosetPhoto = null;
+let photoUploadMode = "single";
+let pendingPhotoQueue = [];
+let pendingPhotoQueueTotal = 0;
+const MAX_CLOSET_QUEUE_ITEMS = 20;
+
+let authMode = "login";
+let resolveAuthGate = null;
+let currentAccountEmail = "";
+
+const PHOTO_UPLOAD_COPY = {
+  single: {
+    description: "Upload a picture of the item and QuickFit will suggest the fields below for you to review before saving.",
+    specs: [
+      "One clothing item per photo",
+      "Laid flat, on a hanger, or on a mannequin — not worn by a person",
+      "Good lighting, plain background, item fills most of the frame",
+    ],
+  },
+  closet: {
+    description: "Upload a photo of a closet, rack, or shelf and QuickFit will suggest items one at a time for you to review and save.",
+    specs: [
+      "Photograph a section of hanging clothes or a shelf",
+      "Non-clothing items (boxes, luggage, bags) are ignored automatically",
+      "Heavily overlapping or hidden items may be missed — review each suggestion before saving",
+    ],
+  },
+};
 
 init();
 
@@ -272,10 +340,219 @@ async function init() {
   syncConditionalFields();
   populateClosetFilter();
   bindEvents();
+  bindAuthEvents();
+
+  await ensureAuthenticated();
+  await hydrateStateFromApi();
+
   renderCloset();
   renderProfile();
   generateRecommendation(getPlannerState());
   await initializeWeatherAccess();
+  await maybeOfferLocalImport();
+}
+
+function getApiBase() {
+  const endpoint = typeof window.QUICKFIT_PHOTO_ANALYSIS_ENDPOINT === "string"
+    ? window.QUICKFIT_PHOTO_ANALYSIS_ENDPOINT.trim()
+    : "";
+  return endpoint.replace(/\/$/, "");
+}
+
+function getAuthToken() {
+  return localStorage.getItem(STORAGE_KEYS.authToken) || "";
+}
+
+function setAuthToken(token) {
+  localStorage.setItem(STORAGE_KEYS.authToken, token);
+}
+
+function clearAuthToken() {
+  localStorage.removeItem(STORAGE_KEYS.authToken);
+}
+
+async function authFetch(path, options = {}) {
+  const base = getApiBase();
+  if (!base) {
+    throw new Error("QuickFit's backend isn't configured for this deployment yet.");
+  }
+
+  const token = getAuthToken();
+  const headers = { ...(options.headers || {}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+
+  const response = await fetch(`${base}${path}`, { ...options, headers });
+
+  if (response.status === 401) {
+    clearAuthToken();
+    showAuthGate("login", "Your session expired. Please log in again.");
+    throw new Error("Not authenticated.");
+  }
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const body = await response.json();
+      if (body?.error) message = body.error;
+    } catch (_error) {
+      // Keep the default message if the error body isn't JSON.
+    }
+    throw new Error(message);
+  }
+
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+function showAuthGate(mode = "login", statusMessage = "") {
+  authMode = mode;
+  elements.authGate?.classList.remove("is-hidden");
+  syncAuthModeUi();
+  if (elements.authStatus) elements.authStatus.textContent = statusMessage;
+}
+
+function hideAuthGate() {
+  elements.authGate?.classList.add("is-hidden");
+}
+
+function syncAuthModeUi() {
+  const isSignup = authMode === "signup";
+  if (elements.authGateTitle) elements.authGateTitle.textContent = isSignup ? "Create your account" : "Log in";
+  if (elements.authSubmit) elements.authSubmit.textContent = isSignup ? "Create Account" : "Log In";
+  elements.authConfirmField?.classList.toggle("is-hidden", !isSignup);
+  if (elements.authConfirmInput) elements.authConfirmInput.required = isSignup;
+  if (elements.authModeToggle) {
+    elements.authModeToggle.textContent = isSignup
+      ? "Already have an account? Log in"
+      : "Don't have an account? Sign up";
+  }
+}
+
+function bindAuthEvents() {
+  elements.authModeToggle?.addEventListener("click", () => {
+    authMode = authMode === "signup" ? "login" : "signup";
+    if (elements.authStatus) elements.authStatus.textContent = "";
+    syncAuthModeUi();
+  });
+
+  elements.authForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = elements.authEmailInput.value.trim();
+    const password = elements.authPasswordInput.value;
+
+    if (authMode === "signup" && password !== elements.authConfirmInput.value) {
+      elements.authStatus.textContent = "Passwords don't match.";
+      return;
+    }
+
+    elements.authSubmit.disabled = true;
+    elements.authStatus.textContent = authMode === "signup" ? "Creating your account..." : "Logging in...";
+
+    try {
+      const path = authMode === "signup" ? "/auth/signup" : "/auth/login";
+      const data = await authFetch(path, { method: "POST", body: JSON.stringify({ email, password }) });
+      setAuthToken(data.token);
+      currentAccountEmail = data.user?.email || "";
+      elements.authForm.reset();
+      hideAuthGate();
+      resolveAuthGate?.();
+      resolveAuthGate = null;
+    } catch (error) {
+      elements.authStatus.textContent = error.message || "Something went wrong. Please try again.";
+    } finally {
+      elements.authSubmit.disabled = false;
+    }
+  });
+
+  elements.logOutButton?.addEventListener("click", async () => {
+    try {
+      await authFetch("/auth/logout", { method: "POST" });
+    } catch (_error) {
+      // Log out locally regardless of whether the network call succeeded.
+    }
+    clearAuthToken();
+    window.location.reload();
+  });
+}
+
+async function ensureAuthenticated() {
+  const token = getAuthToken();
+  let authenticated = false;
+
+  if (token) {
+    try {
+      const { user } = await authFetch("/auth/session");
+      currentAccountEmail = user?.email || "";
+      authenticated = true;
+    } catch (_error) {
+      authenticated = false;
+    }
+  }
+
+  if (authenticated) return;
+
+  showAuthGate("login");
+  await new Promise((resolve) => {
+    resolveAuthGate = resolve;
+  });
+}
+
+async function hydrateStateFromApi() {
+  const [closetData, profileData, favoritesData] = await Promise.all([
+    authFetch("/closet"),
+    authFetch("/profile"),
+    authFetch("/favorites"),
+  ]);
+
+  state.closet = closetData?.items || [];
+  state.profile = normalizeProfile(profileData || defaultProfile);
+  state.favoriteOutfits = favoritesData?.outfits || [];
+
+  if (elements.accountEmail) {
+    elements.accountEmail.textContent = currentAccountEmail ? `Signed in as ${currentAccountEmail}` : "";
+  }
+}
+
+async function maybeOfferLocalImport() {
+  if (state.closet.length) return;
+  if (localStorage.getItem(STORAGE_KEYS.importPrompted)) return;
+
+  const localCloset = loadCollection(STORAGE_KEYS.closet, []);
+  localStorage.setItem(STORAGE_KEYS.importPrompted, "true");
+  if (!Array.isArray(localCloset) || !localCloset.length) return;
+
+  showAppModal({
+    eyebrow: "Import closet",
+    title: "Import your existing closet?",
+    message: `We found ${localCloset.length} item${localCloset.length === 1 ? "" : "s"} saved on this device from before accounts existed. Import them into your account?`,
+    confirmLabel: "Import",
+    cancelLabel: "Skip",
+    onConfirm: async () => {
+      try {
+        await authFetch("/closet/import", { method: "POST", body: JSON.stringify({ items: localCloset }) });
+
+        const localFavorites = loadCollection(STORAGE_KEYS.favoriteOutfits, []);
+        if (Array.isArray(localFavorites) && localFavorites.length) {
+          await Promise.all(localFavorites.map((outfit) => (
+            authFetch("/favorites", { method: "POST", body: JSON.stringify(outfit) }).catch(() => null)
+          )));
+        }
+
+        await hydrateStateFromApi();
+        populateClosetFilter();
+        renderCloset();
+        renderProfile();
+        generateRecommendation(getPlannerState());
+      } catch (_error) {
+        showAppModal({
+          eyebrow: "Import closet",
+          title: "Import failed",
+          message: "Something went wrong importing your closet. You can try again by signing out and back in.",
+        });
+      }
+    },
+  });
 }
 
 async function initializeWeatherAccess() {
@@ -289,27 +566,21 @@ async function initializeWeatherAccess() {
     return;
   }
 
-  elements.weatherStatus.textContent = "Click 'Use My Current Weather' to share location and load weather from the secure proxy.";
+  if ("permissions" in navigator && typeof navigator.permissions.query === "function") {
+    try {
+      const geolocationPermission = await navigator.permissions.query({ name: "geolocation" });
 
-  if (!("permissions" in navigator) || typeof navigator.permissions.query !== "function") {
-    return;
+      if (geolocationPermission.state === "denied") {
+        elements.weatherStatus.textContent = "Location access is blocked in browser settings, so QuickFit is using manual defaults.";
+        return;
+      }
+    } catch (_error) {
+      // Ignore permissions API failures and fall through to requesting location directly.
+    }
   }
 
-  try {
-    const geolocationPermission = await navigator.permissions.query({ name: "geolocation" });
-
-    if (geolocationPermission.state === "granted") {
-      elements.weatherStatus.textContent = "Location already allowed. Refreshing your local weather defaults.";
-      await loadCurrentWeatherDefaults(false);
-      return;
-    }
-
-    if (geolocationPermission.state === "denied") {
-      elements.weatherStatus.textContent = "Location access is blocked in browser settings, so QuickFit is using manual defaults.";
-    }
-  } catch (_error) {
-    // Ignore permissions API failures and keep the click-to-consent flow.
-  }
+  elements.weatherStatus.textContent = "Checking your local weather for the default planner values.";
+  await loadCurrentWeatherDefaults(false);
 }
 
 function bindEvents() {
@@ -352,6 +623,21 @@ function bindEvents() {
     generateRecommendation(getPlannerState(new FormData(event.currentTarget)));
   });
 
+  elements.plannerSubtabButtons.forEach((button) => {
+    button.addEventListener("click", () => setActivePlannerTab(button.dataset.plannerTab));
+  });
+
+  elements.hourlyOutfitDate?.addEventListener("change", () => {
+    loadHourlyForecastOptions();
+  });
+
+  elements.hourlyPlannerForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const plannerState = getHourlyPlannerState();
+    if (!plannerState) return;
+    generateRecommendation(plannerState);
+  });
+
   elements.typeSelect.addEventListener("change", (event) => {
     updateStyleOptions(event.target.value);
     syncConditionalFields();
@@ -359,6 +645,8 @@ function bindEvents() {
 
   elements.styleSelect.addEventListener("change", syncConditionalFields);
   elements.colorSelect.addEventListener("change", syncConditionalFields);
+  elements.patternTypeSelect?.addEventListener("change", syncConditionalFields);
+  elements.patternCustomInput?.addEventListener("input", updatePatternHint);
   elements.toggleTuckButton.addEventListener("click", () => {
     state.mannequinControls.tuckedIn = !state.mannequinControls.tuckedIn;
     generateRecommendation(getPlannerState());
@@ -368,25 +656,42 @@ function bindEvents() {
     generateRecommendation(getPlannerState());
   });
 
-  elements.closetForm.addEventListener("submit", (event) => {
+  elements.closetForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const item = buildClosetItem(formData);
     if (!item) return;
 
-    state.closet.unshift({
-      id: crypto.randomUUID(),
-      ...item,
-      photo: pendingClosetPhoto,
-    });
+    elements.closetSaveButton.disabled = true;
+    let savedItem;
+    try {
+      const response = await authFetch("/closet", {
+        method: "POST",
+        body: JSON.stringify({ ...item, photo: pendingClosetPhoto }),
+      });
+      savedItem = response.item;
+    } catch (error) {
+      showAppModal({
+        eyebrow: "Closet",
+        title: "Couldn't save item",
+        message: error.message || "Something went wrong saving this item. Please try again.",
+      });
+      return;
+    } finally {
+      elements.closetSaveButton.disabled = false;
+    }
 
-    persistCollection(STORAGE_KEYS.closet, state.closet);
-    event.currentTarget.reset();
-    elements.typeSelect.selectedIndex = 0;
-    elements.colorSelect.selectedIndex = 0;
-    clearPendingPhotoUpload();
-    updateStyleOptions(elements.typeSelect.value);
-    syncConditionalFields();
+    state.closet.unshift(savedItem);
+
+    if (pendingPhotoQueue.length) {
+      pendingPhotoQueue.shift();
+      resetClosetFormFields();
+      loadNextQueueItem();
+    } else {
+      resetClosetFormFields();
+      clearPendingPhotoUpload();
+    }
+
     populateClosetFilter();
     renderCloset();
     generateRecommendation(getPlannerState());
@@ -399,10 +704,22 @@ function bindEvents() {
     renderCloset();
   });
 
-  elements.profileForm.addEventListener("submit", (event) => {
+  elements.profileForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    state.profile = Object.fromEntries(new FormData(event.currentTarget).entries());
-    persistObject(STORAGE_KEYS.profile, state.profile);
+    const profilePayload = Object.fromEntries(new FormData(event.currentTarget).entries());
+
+    try {
+      const { profile } = await authFetch("/profile", { method: "PUT", body: JSON.stringify(profilePayload) });
+      state.profile = profile;
+    } catch (error) {
+      showAppModal({
+        eyebrow: "Profile",
+        title: "Couldn't save profile",
+        message: error.message || "Something went wrong saving your profile. Please try again.",
+      });
+      return;
+    }
+
     renderProfile();
     generateRecommendation(getPlannerState());
   });
@@ -414,8 +731,8 @@ function bindEvents() {
       message: "This clears your temperature preference, style direction, and presentation preference back to their defaults. Your closet and saved outfits are not affected.",
       confirmLabel: "Reset Profile",
       cancelLabel: "Cancel",
-      onConfirm: () => {
-        resetProfileOnly();
+      onConfirm: async () => {
+        await resetProfileOnly();
         showAppModal({
           eyebrow: "Profile",
           title: "Profile reset",
@@ -445,6 +762,30 @@ function bindEvents() {
     });
   });
 
+  elements.deleteAccountButton?.addEventListener("click", () => {
+    showAppModal({
+      eyebrow: "Danger zone",
+      title: "Delete your account?",
+      message: "This permanently deletes your QuickFit account, login, closet, and saved outfits. This can't be undone.",
+      confirmLabel: "Delete Account",
+      cancelLabel: "Cancel",
+      onConfirm: async () => {
+        try {
+          await authFetch("/auth/account", { method: "DELETE" });
+        } catch (error) {
+          showAppModal({
+            eyebrow: "Danger zone",
+            title: "Couldn't delete account",
+            message: error.message || "Something went wrong. Please try again.",
+          });
+          return;
+        }
+        clearAuthToken();
+        window.location.reload();
+      },
+    });
+  });
+
   elements.favoriteOutfitButton.addEventListener("click", () => {
     toggleFavoriteCurrentOutfit();
   });
@@ -458,11 +799,30 @@ function bindEvents() {
     const [file] = event.target.files || [];
     if (file) handlePhotoUpload(file);
   });
+
+  elements.photoModeSingleButton?.addEventListener("click", () => setPhotoUploadMode("single"));
+  elements.photoModeClosetButton?.addEventListener("click", () => setPhotoUploadMode("closet"));
+
+  elements.photoQueueSkipButton?.addEventListener("click", () => {
+    if (!pendingPhotoQueue.length) return;
+    pendingPhotoQueue.shift();
+    resetClosetFormFields();
+    loadNextQueueItem();
+  });
+
+  elements.photoQueueStopButton?.addEventListener("click", () => {
+    stopPhotoQueue();
+    elements.photoUploadStatus.textContent = "Stopped reviewing. Remaining items were discarded.";
+  });
 }
 
-function resetProfileOnly() {
-  state.profile = { ...defaultProfile };
-  persistObject(STORAGE_KEYS.profile, state.profile);
+async function resetProfileOnly() {
+  try {
+    const { profile } = await authFetch("/profile", { method: "PUT", body: JSON.stringify(defaultProfile) });
+    state.profile = profile;
+  } catch (_error) {
+    state.profile = { ...defaultProfile };
+  }
 
   elements.profileForm.reset();
   elements.stylePreferenceSelect.value = defaultProfile.profileStyle;
@@ -471,6 +831,11 @@ function resetProfileOnly() {
 }
 
 async function clearAllDataOnly() {
+  await Promise.all([
+    ...state.closet.map((item) => authFetch(`/closet/${item.id}`, { method: "DELETE" }).catch(() => null)),
+    ...state.favoriteOutfits.map((outfit) => authFetch(`/favorites/${outfit.id}`, { method: "DELETE" }).catch(() => null)),
+  ]);
+
   state.closet = [];
   state.favoriteOutfits = [];
   state.currentRecommendation = null;
@@ -480,8 +845,6 @@ async function clearAllDataOnly() {
   };
   state.weatherLocation = null;
 
-  persistCollection(STORAGE_KEYS.closet, state.closet);
-  persistCollection(STORAGE_KEYS.favoriteOutfits, state.favoriteOutfits);
   localStorage.removeItem(STORAGE_KEYS.lastLocation);
 
   elements.closetForm.reset();
@@ -511,6 +874,97 @@ function setActiveSection(sectionId) {
   });
 
   document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function setActivePlannerTab(tab) {
+  elements.plannerSubtabButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.plannerTab === tab);
+  });
+  elements.plannerDayPanel?.classList.toggle("is-active", tab === "day");
+  elements.plannerDayPanel?.classList.toggle("is-hidden", tab !== "day");
+  elements.plannerHourlyPanel?.classList.toggle("is-active", tab === "hourly");
+  elements.plannerHourlyPanel?.classList.toggle("is-hidden", tab !== "hourly");
+
+  if (tab === "hourly") {
+    if (!elements.hourlyOutfitDate.value) elements.hourlyOutfitDate.value = elements.outfitDate.value;
+    loadHourlyForecastOptions();
+  }
+}
+
+async function loadHourlyForecastOptions() {
+  if (!elements.hourlySlotSelect) return;
+
+  if (!state.weatherLocation) {
+    elements.hourlyWeatherStatus.textContent = 'Location needed — click "Use My Current Weather" on the Day Overview tab first.';
+    elements.hourlySlotSelect.innerHTML = "";
+    elements.hourlySlotSelect.disabled = true;
+    return;
+  }
+
+  const selectedDate = elements.hourlyOutfitDate.value
+    ? new Date(`${elements.hourlyOutfitDate.value}T12:00:00`)
+    : new Date();
+
+  elements.hourlyWeatherStatus.textContent = "Loading hourly forecast...";
+  elements.hourlySlotSelect.disabled = true;
+
+  try {
+    const forecastData = await fetchForecastWeather(state.weatherLocation.latitude, state.weatherLocation.longitude);
+    const dayEntries = forecastData.list.filter((entry) => isSameForecastDay(entry.dt, selectedDate));
+
+    if (!dayEntries.length) {
+      elements.hourlyWeatherStatus.textContent = "No forecast slots are available for that date yet (forecasts only cover the next few days).";
+      elements.hourlySlotSelect.innerHTML = "";
+      return;
+    }
+
+    elements.hourlySlotSelect.innerHTML = "";
+    dayEntries.forEach((entry) => {
+      const entryDate = new Date(entry.dt * 1000);
+      const temperature = Math.round(entry.main.temp);
+      const weatherCategory = mapWeatherCondition(
+        entry.weather?.[0]?.main,
+        entry.weather?.[0]?.description,
+        entry.wind?.speed
+      );
+      const timeLabel = entryDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+      const option = document.createElement("option");
+      option.textContent = `${timeLabel} · ${temperature}°F · ${capitalize(weatherCategory)}`;
+      option.dataset.temperature = String(temperature);
+      option.dataset.weather = weatherCategory;
+      option.dataset.label = timeLabel;
+      elements.hourlySlotSelect.append(option);
+    });
+
+    elements.hourlySlotSelect.disabled = false;
+    elements.hourlyWeatherStatus.textContent = `Showing 3-hour forecast slots for ${formatDisplayDate(selectedDate)}.`;
+  } catch (error) {
+    elements.hourlyWeatherStatus.textContent = buildWeatherErrorMessage(error);
+    elements.hourlySlotSelect.innerHTML = "";
+  }
+}
+
+function getHourlyPlannerState() {
+  const slotOption = elements.hourlySlotSelect.selectedOptions[0];
+  if (!slotOption) {
+    showAppModal({
+      eyebrow: "Hourly planner",
+      title: "Pick a time first",
+      message: "Choose a date and time slot before generating an hourly recommendation.",
+    });
+    return null;
+  }
+
+  return {
+    temperature: Number(slotOption.dataset.temperature),
+    weather: slotOption.dataset.weather,
+    season: elements.season.value,
+    theme: document.querySelector("#theme").value,
+    stylePreference: elements.stylePreferenceSelect.value,
+    outfitDate: elements.hourlyOutfitDate.value,
+    hour: slotOption.dataset.label,
+  };
 }
 
 function populateSeasonOptions() {
@@ -544,7 +998,7 @@ function populateSelectOptions(selectElement, options) {
 function populateOutfitDate() {
   const today = new Date();
   const maxDate = new Date(today);
-  maxDate.setDate(today.getDate() + 5);
+  maxDate.setDate(today.getDate() + 3);
   elements.outfitDate.value = formatDateInput(today);
   elements.outfitDate.min = formatDateInput(today);
   elements.outfitDate.max = formatDateInput(maxDate);
@@ -616,6 +1070,65 @@ async function loadWeatherDefaultsForSelection(triggeredManually = false) {
   }
 }
 
+function applyCurrentWeatherDefaults(weatherData, forecastData, selectedDate) {
+  const temperature = Math.round(weatherData.main.temp);
+  const dayEntries = forecastData?.list?.filter((entry) => isSameForecastDay(entry.dt, selectedDate)) || [];
+  const forecastHigh = dayEntries.length
+    ? Math.max(...dayEntries.map((entry) => entry.main.temp_max))
+    : weatherData.main.temp_max;
+  const forecastLow = dayEntries.length
+    ? Math.min(...dayEntries.map((entry) => entry.main.temp_min))
+    : weatherData.main.temp_min;
+  const highTemperature = Math.round(Math.max(weatherData.main.temp, forecastHigh));
+  const lowTemperature = Math.round(Math.min(weatherData.main.temp, forecastLow));
+  const weatherCategory = mapWeatherCondition(
+    weatherData.weather?.[0]?.main,
+    weatherData.weather?.[0]?.description,
+    weatherData.wind?.speed
+  );
+  const season = detectSeason(new Date((weatherData.dt + weatherData.timezone) * 1000));
+  const locationName = weatherData.name || "your area";
+  const conditionLabel = weatherData.weather?.[0]?.description || weatherData.weather?.[0]?.main || weatherCategory;
+
+  elements.temperature.value = String(temperature);
+  elements.temperatureValue.textContent = `${temperature}°F`;
+  elements.weatherSelect.value = weatherCategory;
+  elements.season.value = season;
+  elements.weatherStatus.textContent = `Using current weather for ${locationName}:\nHigh of ${highTemperature}°F and Low of ${lowTemperature}°F and ${formatWeatherSummary(conditionLabel)}.`;
+  generateRecommendation(getPlannerState());
+}
+
+function applyForecastWeatherDefaults(forecastData, selectedDate) {
+  const dayEntries = forecastData.list.filter((entry) => isSameForecastDay(entry.dt, selectedDate));
+  if (!dayEntries.length) {
+    const error = new Error("Forecast unavailable for selected date");
+    error.forecastUnavailable = true;
+    throw error;
+  }
+
+  const representativeEntry = selectRepresentativeForecastEntry(dayEntries);
+  const highTemperature = Math.round(Math.max(...dayEntries.map((entry) => entry.main.temp_max)));
+  const lowTemperature = Math.round(Math.min(...dayEntries.map((entry) => entry.main.temp_min)));
+  const temperature = Math.round(representativeEntry.main.temp);
+  const weatherCategory = mapWeatherCondition(
+    representativeEntry.weather?.[0]?.main,
+    representativeEntry.weather?.[0]?.description,
+    representativeEntry.wind?.speed
+  );
+  const timezoneOffset = forecastData.city?.timezone || 0;
+  const season = detectSeason(new Date((representativeEntry.dt + timezoneOffset) * 1000));
+  const locationName = forecastData.city?.name || "your area";
+  const conditionLabel =
+    representativeEntry.weather?.[0]?.description || representativeEntry.weather?.[0]?.main || weatherCategory;
+
+  elements.temperature.value = String(temperature);
+  elements.temperatureValue.textContent = `${temperature}°F`;
+  elements.weatherSelect.value = weatherCategory;
+  elements.season.value = season;
+  elements.weatherStatus.textContent = `Using forecast weather for ${locationName} on ${formatDisplayDate(selectedDate)}:\nHigh of ${highTemperature}°F and Low of ${lowTemperature}°F and ${formatWeatherSummary(conditionLabel)}.`;
+  generateRecommendation(getPlannerState());
+}
+
 function parseSelectedDate() {
   if (!elements.outfitDate.value) return new Date();
   return new Date(`${elements.outfitDate.value}T12:00:00`);
@@ -676,19 +1189,86 @@ function updateStyleOptions(type) {
   });
 }
 
+const PATTERN_TYPE_LABELS = {
+  stripes: "Stripes",
+  dots: "Polka dot",
+  plaid: "Plaid",
+  floral: "Floral",
+  chevron: "Chevron",
+};
+
+// Maps detectClothingPatternType()'s result to this form's <option value>, so an
+// AI-suggested pattern (e.g. "Striped") lands on the matching dropdown option instead
+// of silently failing to select anything on a <select>.
+const PATTERN_TYPE_OPTION_VALUES = {
+  stripes: "Stripes",
+  dots: "Polka Dot",
+  plaid: "Plaid",
+  floral: "Floral",
+  chevron: "Chevron",
+};
+
+function applySuggestedPattern(rawPattern) {
+  if (!elements.patternTypeSelect) return;
+
+  const detected = detectClothingPatternType(rawPattern);
+  const optionValue = detected ? PATTERN_TYPE_OPTION_VALUES[detected] : null;
+
+  if (optionValue) {
+    elements.patternTypeSelect.value = optionValue;
+  } else {
+    elements.patternTypeSelect.value = "Other";
+    if (elements.patternCustomInput) elements.patternCustomInput.value = rawPattern;
+  }
+
+  syncConditionalFields();
+}
+
+function updatePatternHint() {
+  if (!elements.patternHint) return;
+
+  if (elements.patternTypeSelect.value !== "Other") {
+    elements.patternHint.textContent = "";
+    return;
+  }
+
+  const rawPattern = elements.patternCustomInput.value.trim();
+  if (!rawPattern) {
+    elements.patternHint.textContent = "";
+    return;
+  }
+
+  const patternType = detectClothingPatternType(rawPattern);
+  if (!patternType) {
+    elements.patternHint.textContent = "Will render as solid (no visible pattern).";
+  } else if (patternType === "textured") {
+    elements.patternHint.textContent = `Will render as a generic textured pattern (not a literal illustration of "${rawPattern}").`;
+  } else {
+    elements.patternHint.textContent = `Will render as: ${PATTERN_TYPE_LABELS[patternType] || patternType}.`;
+  }
+}
+
 function syncConditionalFields() {
   const showCustomColor = elements.colorSelect.value === "Multicolor";
+  const showCustomPattern = elements.patternTypeSelect?.value === "Other";
   const showClosetTheme = elements.typeSelect.value !== "Accessories";
   const showJewelrySubtype =
     elements.typeSelect.value === "Accessories" && elements.styleSelect.value === "Jewelry";
   const showSkirtLength = elements.typeSelect.value === "Skirts";
+  const showDressLength = elements.typeSelect.value === "Dresses";
   const sleevelessShirtStyles = new Set(["Tank top", "Sleeveless shirt", "Sports bra", "Tube top"]);
   const showSleeveLength =
-    elements.typeSelect.value === "Shirts" && !sleevelessShirtStyles.has(elements.styleSelect.value);
+    (elements.typeSelect.value === "Shirts" && !sleevelessShirtStyles.has(elements.styleSelect.value)) ||
+    elements.typeSelect.value === "Dresses";
+  const sleeveLengthRequired = elements.typeSelect.value === "Shirts" && showSleeveLength;
 
   elements.customColorField.classList.toggle("is-hidden", !showCustomColor);
   elements.customColorInput.required = showCustomColor;
   if (!showCustomColor) elements.customColorInput.value = "";
+
+  elements.patternCustomField?.classList.toggle("is-hidden", !showCustomPattern);
+  if (!showCustomPattern && elements.patternCustomInput) elements.patternCustomInput.value = "";
+  updatePatternHint();
 
   elements.closetThemeField.classList.toggle("is-hidden", !showClosetTheme);
   elements.closetThemeSelect.required = showClosetTheme;
@@ -702,8 +1282,12 @@ function syncConditionalFields() {
   elements.skirtLengthSelect.required = showSkirtLength;
   if (!showSkirtLength) elements.skirtLengthSelect.value = "";
 
+  elements.dressLengthField.classList.toggle("is-hidden", !showDressLength);
+  elements.dressLengthSelect.required = showDressLength;
+  if (!showDressLength) elements.dressLengthSelect.value = "";
+
   elements.sleeveLengthField.classList.toggle("is-hidden", !showSleeveLength);
-  elements.sleeveLengthSelect.required = showSleeveLength;
+  elements.sleeveLengthSelect.required = sleeveLengthRequired;
   if (!showSleeveLength) elements.sleeveLengthSelect.value = "";
 }
 
@@ -713,6 +1297,10 @@ function buildClosetItem(formData) {
 
   if (!color) return null;
 
+  const pattern = rawItem.patternType === "Other"
+    ? rawItem.patternCustom.trim()
+    : rawItem.patternType === "Solid" ? "" : rawItem.patternType;
+
   return {
     name: buildAutoItemName({
       color,
@@ -721,11 +1309,12 @@ function buildClosetItem(formData) {
     }),
     color,
     baseColor: rawItem.color,
-    pattern: rawItem.pattern.trim(),
+    pattern,
     material: rawItem.material.trim(),
     type: rawItem.type,
     style: rawItem.style,
     skirtLength: rawItem.skirtLength || "",
+    dressLength: rawItem.dressLength || "",
     sleeveLength: rawItem.sleeveLength || "",
     jewelryType: rawItem.jewelryType || "",
     theme: rawItem.type === "Accessories" ? "" : rawItem.theme,
@@ -742,6 +1331,18 @@ function buildAutoItemName({ color, style, jewelryType }) {
     .join(" ");
 }
 
+function setPhotoUploadMode(mode) {
+  photoUploadMode = mode;
+  elements.photoModeSingleButton?.classList.toggle("is-active", mode === "single");
+  elements.photoModeClosetButton?.classList.toggle("is-active", mode === "closet");
+
+  const copy = PHOTO_UPLOAD_COPY[mode];
+  if (elements.photoUploadDescription) elements.photoUploadDescription.textContent = copy.description;
+  if (elements.photoUploadSpecs) {
+    elements.photoUploadSpecs.innerHTML = copy.specs.map((spec) => `<li>${spec}</li>`).join("");
+  }
+}
+
 async function handlePhotoUpload(file) {
   let dataUrl;
   try {
@@ -750,6 +1351,8 @@ async function handlePhotoUpload(file) {
     elements.photoUploadStatus.textContent = "Couldn't read that photo. Please try a different file.";
     return;
   }
+
+  stopPhotoQueue({ clearPhoto: false });
 
   pendingClosetPhoto = dataUrl;
   elements.photoUploadThumb.src = dataUrl;
@@ -764,23 +1367,130 @@ async function handlePhotoUpload(file) {
     return;
   }
 
-  elements.photoUploadStatus.textContent = "Analyzing photo...";
+  elements.photoUploadStatus.textContent = "Uploading photo...";
+  setUploadProgress(0);
 
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: dataUrl }),
+    const suggestion = await requestPhotoAnalysis(endpoint, dataUrl, photoUploadMode, {
+      onProgress: setUploadProgress,
+      onUploadComplete: () => {
+        setUploadIndeterminate();
+        elements.photoUploadStatus.textContent = photoUploadMode === "closet"
+          ? "Scanning closet photo for items..."
+          : "Analyzing photo...";
+      },
     });
 
-    if (!response.ok) throw new Error(`Photo analysis endpoint responded with ${response.status}`);
+    hideUploadProgress();
 
-    const suggestion = await response.json();
-    applyPhotoSuggestion(suggestion);
-    elements.photoUploadStatus.textContent = "Suggested fields filled in below, review them and Save to Closet.";
+    if (photoUploadMode === "closet") {
+      startPhotoQueue(Array.isArray(suggestion?.items) ? suggestion.items : []);
+    } else {
+      applyPhotoSuggestion(suggestion);
+      elements.photoUploadStatus.textContent = suggestion?.photoIssue
+        ? `${suggestion.photoIssue} Suggestions below may be off, consider a clearer photo (single item, laid flat/hung, no person).`
+        : "Suggested fields filled in below, review them and Save to Closet.";
+    }
   } catch (_error) {
+    hideUploadProgress();
     elements.photoUploadStatus.textContent = "Couldn't auto-analyze this photo. Fill in the fields below manually.";
   }
+}
+
+function requestPhotoAnalysis(endpoint, dataUrl, mode, { onProgress, onUploadComplete } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", endpoint);
+    xhr.setRequestHeader("Content-Type", "application/json");
+
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) onProgress?.((event.loaded / event.total) * 100);
+    });
+    xhr.upload.addEventListener("load", () => onUploadComplete?.());
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(`Photo analysis endpoint responded with ${xhr.status}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText));
+      } catch (_error) {
+        reject(new Error("Photo analysis endpoint returned malformed JSON."));
+      }
+    });
+    xhr.addEventListener("error", () => reject(new Error("Network error while analyzing photo.")));
+
+    xhr.send(JSON.stringify({ image: dataUrl, mode }));
+  });
+}
+
+function setUploadProgress(percent) {
+  if (!elements.photoUploadProgress || !elements.photoUploadProgressBar) return;
+  elements.photoUploadProgress.classList.remove("is-hidden", "is-indeterminate");
+  elements.photoUploadProgressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+}
+
+function setUploadIndeterminate() {
+  if (!elements.photoUploadProgress || !elements.photoUploadProgressBar) return;
+  elements.photoUploadProgress.classList.remove("is-hidden");
+  elements.photoUploadProgress.classList.add("is-indeterminate");
+  elements.photoUploadProgressBar.style.width = "";
+}
+
+function hideUploadProgress() {
+  elements.photoUploadProgress?.classList.add("is-hidden");
+  elements.photoUploadProgress?.classList.remove("is-indeterminate");
+  if (elements.photoUploadProgressBar) elements.photoUploadProgressBar.style.width = "0%";
+}
+
+function startPhotoQueue(items) {
+  pendingPhotoQueue = items.slice(0, MAX_CLOSET_QUEUE_ITEMS);
+  pendingPhotoQueueTotal = pendingPhotoQueue.length;
+
+  if (!pendingPhotoQueue.length) {
+    elements.photoUploadStatus.textContent = "Couldn't find any clear clothing items in that photo. Try a closer, better-lit shot.";
+    return;
+  }
+
+  elements.photoUploadStatus.textContent =
+    `Found ${pendingPhotoQueue.length} item${pendingPhotoQueue.length === 1 ? "" : "s"}. Review each below, then Save & Next.`;
+  loadNextQueueItem();
+}
+
+function loadNextQueueItem() {
+  if (!pendingPhotoQueue.length) {
+    stopPhotoQueue();
+    elements.photoUploadStatus.textContent = "All done reviewing this closet photo.";
+    return;
+  }
+
+  const next = pendingPhotoQueue[0];
+  applyPhotoSuggestion(next);
+
+  const position = pendingPhotoQueueTotal - pendingPhotoQueue.length + 1;
+  if (elements.photoQueueLabel) {
+    elements.photoQueueLabel.textContent = `Item ${position} of ${pendingPhotoQueueTotal}${next.label ? `: ${next.label}` : ""}`;
+  }
+  elements.photoQueue?.classList.remove("is-hidden");
+  if (elements.closetSaveButton) elements.closetSaveButton.textContent = "Save & Next";
+}
+
+function stopPhotoQueue({ clearPhoto = true } = {}) {
+  pendingPhotoQueue = [];
+  pendingPhotoQueueTotal = 0;
+  elements.photoQueue?.classList.add("is-hidden");
+  if (elements.closetSaveButton) elements.closetSaveButton.textContent = "Save to Closet";
+  resetClosetFormFields();
+  if (clearPhoto) clearPendingPhotoUpload();
+}
+
+function resetClosetFormFields() {
+  elements.closetForm.reset();
+  elements.typeSelect.selectedIndex = 0;
+  elements.colorSelect.selectedIndex = 0;
+  updateStyleOptions(elements.typeSelect.value);
+  syncConditionalFields();
 }
 
 function readFileAsDataUrl(file) {
@@ -816,12 +1526,13 @@ function applyPhotoSuggestion(suggestion) {
     elements.customColorInput.value = suggestion.color;
   }
 
-  if (suggestion.pattern) elements.closetForm.pattern.value = suggestion.pattern;
+  if (suggestion.pattern) applySuggestedPattern(suggestion.pattern);
   if (suggestion.material) elements.closetForm.material.value = suggestion.material;
   if (suggestion.theme && elements.typeSelect.value !== "Accessories") {
     elements.closetThemeSelect.value = suggestion.theme;
   }
   if (suggestion.skirtLength) elements.skirtLengthSelect.value = suggestion.skirtLength;
+  if (suggestion.dressLength) elements.dressLengthSelect.value = suggestion.dressLength;
   if (suggestion.sleeveLength) elements.sleeveLengthSelect.value = suggestion.sleeveLength;
   if (suggestion.jewelryType) elements.jewelryTypeSelect.value = suggestion.jewelryType;
 }
@@ -945,19 +1656,41 @@ function renderCloset() {
       </div>
     `;
 
-    card.querySelector("[data-delete-id]")?.addEventListener("click", () => {
+    card.querySelector("[data-delete-id]")?.addEventListener("click", async () => {
+      try {
+        await authFetch(`/closet/${item.id}`, { method: "DELETE" });
+      } catch (error) {
+        showAppModal({
+          eyebrow: "Closet",
+          title: "Couldn't remove item",
+          message: error.message || "Something went wrong. Please try again.",
+        });
+        return;
+      }
       state.closet = state.closet.filter((entry) => entry.id !== item.id);
-      persistCollection(STORAGE_KEYS.closet, state.closet);
       renderCloset();
       renderSavedOutfits();
       generateRecommendation(getPlannerState());
     });
 
-    card.querySelector("[data-favorite-id]")?.addEventListener("click", () => {
+    card.querySelector("[data-favorite-id]")?.addEventListener("click", async () => {
+      const nextIsFavorite = !item.isFavorite;
+      try {
+        await authFetch(`/closet/${item.id}/favorite`, {
+          method: "PATCH",
+          body: JSON.stringify({ isFavorite: nextIsFavorite }),
+        });
+      } catch (error) {
+        showAppModal({
+          eyebrow: "Closet",
+          title: "Couldn't update favorite",
+          message: error.message || "Something went wrong. Please try again.",
+        });
+        return;
+      }
       state.closet = state.closet.map((entry) => (
-        entry.id === item.id ? { ...entry, isFavorite: !entry.isFavorite } : entry
+        entry.id === item.id ? { ...entry, isFavorite: nextIsFavorite } : entry
       ));
-      persistCollection(STORAGE_KEYS.closet, state.closet);
       renderCloset();
     });
 
@@ -970,6 +1703,7 @@ function getClosetCardTags(item, materialLabel) {
     shouldShowClosetStyleTag(item) ? describeStyle(item) : "",
     item.pattern ? `${item.pattern} pattern` : "",
     item.type === "Skirts" && item.skirtLength ? `${item.skirtLength} length` : "",
+    item.type === "Dresses" && item.dressLength ? `${item.dressLength} length` : "",
     shouldShowClosetSleeveTag(item) ? item.sleeveLength : "",
     item.theme,
     materialLabel,
@@ -989,7 +1723,7 @@ function shouldShowClosetStyleTag(item) {
 }
 
 function shouldShowClosetSleeveTag(item) {
-  return Boolean(item.sleeveLength) && item.type === "Shirts";
+  return Boolean(item.sleeveLength) && (item.type === "Shirts" || item.type === "Dresses");
 }
 
 function setClosetFavoriteFilter(mode) {
@@ -1032,11 +1766,14 @@ function updateMannequinPresentation(presentation) {
   elements.mannequinShell.style.setProperty("--mannequin-mask", `url("${silhouetteSource}")`);
 }
 
-function generateRecommendation({ temperature, weather, season, theme, stylePreference }) {
+function generateRecommendation({ temperature, weather, season, theme, stylePreference, outfitDate, hour }) {
+  const effectiveOutfitDate = outfitDate ?? elements.outfitDate.value;
   const effectiveTemperature = applyTemperatureBias(temperature, state.profile.temperatureBias);
   let layerItem = chooseItem("jacket", { effectiveTemperature, theme, stylePreference, weather });
   let topItem = chooseItem("top", { effectiveTemperature, theme, stylePreference, layerItem });
-  let bottomItem = chooseItem("bottom", { effectiveTemperature, theme, stylePreference });
+  let bottomItem = topItem?.type === "Dresses"
+    ? null
+    : chooseItem("bottom", { effectiveTemperature, theme, stylePreference });
   let accessoryItems = chooseAccessoryItems({ effectiveTemperature, theme, stylePreference, weather });
   let shoesItem = chooseItem("shoes", { effectiveTemperature, theme, stylePreference, weather });
   const missingRequiredCategories = getMissingRequiredOutfitCategories({ topItem, bottomItem, shoesItem });
@@ -1052,7 +1789,9 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
 
   const layerAndAccessoryDescriptions = [layerItem, ...accessoryItems].filter(Boolean).map(describeItem);
 
-  elements.weatherSummary.textContent = `${temperature}°F · ${capitalize(weather)} · ${season}`;
+  elements.weatherSummary.textContent = hour
+    ? `${temperature}°F · ${capitalize(weather)} · ${season} · ${hour}`
+    : `${temperature}°F · ${capitalize(weather)} · ${season}`;
   elements.topRecommendation.textContent = topItem
     ? describeItem(topItem)
     : !hasCompleteOutfit && state.closet.some((item) => typeGroups.top.includes(item.type))
@@ -1082,7 +1821,7 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
   maybeAlertWeatherMismatch({ missingRequiredCategories, effectiveTemperature, weather, theme });
 
   state.currentRecommendation = {
-    planner: { temperature, weather, season, theme, stylePreference, outfitDate: elements.outfitDate.value },
+    planner: { temperature, weather, season, theme, stylePreference, outfitDate: effectiveOutfitDate, hour: hour || null },
     topItemId: topItem?.id || null,
     bottomItemId: bottomItem?.id || null,
     layerItemId: layerItem?.id || null,
@@ -1109,7 +1848,7 @@ function generateRecommendation({ temperature, weather, season, theme, stylePref
   });
 }
 
-function toggleFavoriteCurrentOutfit() {
+async function toggleFavoriteCurrentOutfit() {
   const recommendation = state.currentRecommendation;
   if (!recommendation || (!recommendation.topItemId && !recommendation.bottomItemId && !recommendation.layerItemId && !recommendation.accessoryItemIds?.length && !recommendation.shoesItemId)) {
     return;
@@ -1117,24 +1856,32 @@ function toggleFavoriteCurrentOutfit() {
 
   const existingIndex = state.favoriteOutfits.findIndex((outfit) => isSameSavedOutfit(outfit, recommendation));
 
-  if (existingIndex >= 0) {
-    state.favoriteOutfits.splice(existingIndex, 1);
-  } else {
-    state.favoriteOutfits.unshift({
-      id: crypto.randomUUID(),
-      planner: recommendation.planner,
-      topItemId: recommendation.topItemId,
-      bottomItemId: recommendation.bottomItemId,
-      layerItemId: recommendation.layerItemId,
-      accessoryItemIds: recommendation.accessoryItemIds || [],
-      shoesItemId: recommendation.shoesItemId,
-      tuckedIn: recommendation.tuckedIn,
-      jacketClosed: recommendation.jacketClosed,
-      createdAt: new Date().toISOString(),
+  try {
+    if (existingIndex >= 0) {
+      const [existing] = state.favoriteOutfits.splice(existingIndex, 1);
+      await authFetch(`/favorites/${existing.id}`, { method: "DELETE" });
+    } else {
+      const payload = {
+        planner: recommendation.planner,
+        topItemId: recommendation.topItemId,
+        bottomItemId: recommendation.bottomItemId,
+        layerItemId: recommendation.layerItemId,
+        accessoryItemIds: recommendation.accessoryItemIds || [],
+        shoesItemId: recommendation.shoesItemId,
+        tuckedIn: recommendation.tuckedIn,
+        jacketClosed: recommendation.jacketClosed,
+      };
+      const { outfit } = await authFetch("/favorites", { method: "POST", body: JSON.stringify(payload) });
+      state.favoriteOutfits.unshift(outfit);
+    }
+  } catch (error) {
+    showAppModal({
+      eyebrow: "Saved outfits",
+      title: "Couldn't update favorites",
+      message: error.message || "Something went wrong. Please try again.",
     });
   }
 
-  persistCollection(STORAGE_KEYS.favoriteOutfits, state.favoriteOutfits);
   syncFavoriteOutfitButton();
   renderSavedOutfits();
 }
@@ -1211,9 +1958,18 @@ function renderSavedOutfits() {
       loadSavedOutfit(outfit.id);
     });
 
-    card.querySelector("[data-remove-outfit]")?.addEventListener("click", () => {
+    card.querySelector("[data-remove-outfit]")?.addEventListener("click", async () => {
+      try {
+        await authFetch(`/favorites/${outfit.id}`, { method: "DELETE" });
+      } catch (error) {
+        showAppModal({
+          eyebrow: "Saved outfits",
+          title: "Couldn't remove outfit",
+          message: error.message || "Something went wrong. Please try again.",
+        });
+        return;
+      }
       state.favoriteOutfits = state.favoriteOutfits.filter((entry) => entry.id !== outfit.id);
-      persistCollection(STORAGE_KEYS.favoriteOutfits, state.favoriteOutfits);
       renderSavedOutfits();
       syncFavoriteOutfitButton();
     });
@@ -1350,7 +2106,21 @@ function isWeatherEligibleTop(item, temperature, layerItem = null) {
     return temperature >= 51 && temperature <= 70;
   }
 
+  if (item.type === "Dresses") {
+    const dressLength = item.dressLength || "Knee";
+    if (["Mini", "Knee"].includes(dressLength)) {
+      return temperature >= 65;
+    }
+
+    return temperature >= 55;
+  }
+
   if (item.type !== "Shirts") return true;
+
+  const sleevelessShirtStyles = new Set(["Tank top", "Sleeveless shirt", "Sports bra", "Tube top"]);
+  if (sleevelessShirtStyles.has(item.style)) {
+    return temperature >= 65;
+  }
 
   const sleeveLength = item.sleeveLength || defaultSleeveLengthForShirt(item);
   const isShortSleeve = sleeveLength === "Short sleeve";
@@ -1358,7 +2128,7 @@ function isWeatherEligibleTop(item, temperature, layerItem = null) {
   const pairedWithJacket = Boolean(layerItem) && layerItem.type === "Jackets";
 
   if (isShortSleeve) {
-    return temperature >= 71 || (pairedWithJacket && temperature >= 40 && temperature <= 50);
+    return temperature >= 65 || (pairedWithJacket && temperature >= 40 && temperature <= 50);
   }
 
   if (isLongSleeve) {
@@ -1383,8 +2153,12 @@ function isWeatherEligibleBottom(item, temperature) {
 
   if (item.type === "Skirts") {
     const skirtLength = item.skirtLength || "Knee";
-    if (["Mini", "Knee"].includes(skirtLength)) {
+    if (skirtLength === "Mini") {
       return temperature >= 71;
+    }
+
+    if (skirtLength === "Knee") {
+      return temperature >= 65;
     }
 
     return temperature >= 60;
@@ -1450,9 +2224,11 @@ function isClosedToeShoe(item) {
 }
 
 function getMissingRequiredOutfitCategories({ topItem, bottomItem, shoesItem }) {
+  const dressSelected = topItem?.type === "Dresses";
+
   return [
     hasClosetItemsForGroup("top") && !topItem ? "top" : "",
-    hasClosetItemsForGroup("bottom") && !bottomItem ? "bottom" : "",
+    !dressSelected && hasClosetItemsForGroup("bottom") && !bottomItem ? "bottom" : "",
     hasClosetItemsForGroup("shoes") && !shoesItem ? "shoes" : "",
   ].filter(Boolean);
 }
@@ -1568,17 +2344,20 @@ function closeAppAlert() {
 function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effectiveTemperature, accessoryItems = []) {
   const jumpsuitActive = Boolean(bottomItem) && bottomItem.style === "Jumpsuit";
   const overallsActive = Boolean(bottomItem) && bottomItem.style === "Overalls";
+  const dressActive = Boolean(topItem) && topItem.type === "Dresses";
   const sortedAccessoryItems = sortAccessoryItemsForRendering(accessoryItems);
   setMannequinGarment(
     elements.mannequinTop,
     jumpsuitActive
       ? ""
-      : renderTopSvg(
-        topItem,
-        state.mannequinControls,
-        state.profile.presentation,
-        resolveTopRenderMode(topItem, layerItem, overallsActive),
-      ),
+      : dressActive
+        ? renderDressSvg(topItem, state.mannequinControls, state.profile.presentation)
+        : renderTopSvg(
+          topItem,
+          state.mannequinControls,
+          state.profile.presentation,
+          resolveTopRenderMode(topItem, layerItem, overallsActive),
+        ),
   );
   setMannequinGarment(
     elements.mannequinBottom,
@@ -1624,7 +2403,8 @@ function setMannequinGarment(element, svgMarkup) {
 
 function syncMannequinButtons(topItem, bottomItem, layerItem) {
   const onePieceBottom = Boolean(bottomItem) && ["Overalls", "Jumpsuit"].includes(bottomItem.style);
-  const tuckable = Boolean(topItem) && !onePieceBottom && !["Sports bra"].includes(topItem.style);
+  const dressActive = Boolean(topItem) && topItem.type === "Dresses";
+  const tuckable = Boolean(topItem) && !onePieceBottom && !dressActive && !["Sports bra"].includes(topItem.style);
   elements.toggleTuckButton.disabled = !tuckable;
   elements.toggleTuckButton.textContent = state.mannequinControls.tuckedIn ? "Untuck" : "Tuck";
   elements.toggleTuckButton.setAttribute("aria-pressed", state.mannequinControls.tuckedIn ? "true" : "false");
@@ -1675,6 +2455,7 @@ function getPlannerState(formData = null) {
     season: source.get("season"),
     theme: source.get("theme"),
     stylePreference: source.get("stylePreference"),
+    outfitDate: elements.outfitDate.value,
   };
 }
 
@@ -1705,21 +2486,6 @@ function loadCollection(key, fallback) {
     persistCollection(key, fallback);
     return fallback;
   }
-}
-
-function normalizeInitialCloset(closet) {
-  const itemNames = closet.map((item) => item.name).sort();
-  const isLegacySeedCloset = legacySeedClosets.some((seedCloset) => (
-    closet.length === seedCloset.length &&
-    seedCloset.every((name) => itemNames.includes(name))
-  ));
-
-  if (!isLegacySeedCloset) {
-    return closet;
-  }
-
-  persistCollection(STORAGE_KEYS.closet, []);
-  return [];
 }
 
 function normalizeProfile(profile) {
@@ -1806,6 +2572,7 @@ function displayTypeNoun(item) {
     Skirts: "Skirt",
     Sweaters: "Sweater",
     Jackets: "Jacket",
+    Dresses: "Dress",
   };
 
   return typeNouns[item.type] || "";

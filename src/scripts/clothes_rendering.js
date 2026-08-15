@@ -1,6 +1,8 @@
 export {
+  detectClothingPatternType,
   renderAccessorySvg,
   renderBottomSvg,
+  renderDressSvg,
   renderLayerSvg,
   renderShoesSvg,
   renderTopSvg,
@@ -10,8 +12,9 @@ export {
 function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full") {
   if (!item) return "";
 
-  const fill = colorForItem(item.color, "#7fb28a");
-  const stroke = accentColor(fill);
+  const solidFill = colorForItem(item.color, "#7fb28a");
+  const stroke = accentColor(solidFill);
+  const { fill, defs } = buildPatternFill(item, solidFill, stroke);
   const tucked = controls.tuckedIn;
   const silhouette = resolveTopSilhouette(item);
   const feminine = presentation === "Feminine";
@@ -30,6 +33,7 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
 
   if (silhouette === "tube-top") {
     return `<svg viewBox="0 0 176 420" aria-hidden="true">
+      ${defs}
       <rect
         x="${feminine ? 58 : 54}"
         y="108"
@@ -48,6 +52,7 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
     const tankStrapY = feminine ? 82 : 78;
     const tankStrapHeight = feminine ? 28 : 32;
     return `<svg viewBox="0 0 176 420" aria-hidden="true">
+      ${defs}
       <rect
         x="${feminine ? 58 : 54}"
         y="${tankBodyY}"
@@ -166,7 +171,99 @@ function renderTopSvg(item, controls, presentation = "Unspecified", mode = "full
   const trimMarkup = showBody ? trim : "";
   const sleeveMarkup = showSleeves ? sleeves : "";
 
-  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleeveMarkup}${bodyMarkup}${collarMarkup}${trimMarkup}</svg>`;
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${defs}${sleeveMarkup}${bodyMarkup}${collarMarkup}${trimMarkup}</svg>`;
+}
+
+const DRESS_LENGTH_HEMS = { Mini: 236, Knee: 300, Midi: 345, Floor: 400 };
+const STRAIGHT_DRESS_STYLES = new Set(["Shift dress", "Slip dress"]);
+
+function renderDressSvg(item, controls, presentation = "Unspecified") {
+  if (!item) return "";
+
+  const solidFill = colorForItem(item.color, "#8fae8a");
+  const stroke = accentColor(solidFill);
+  const { fill, defs } = buildPatternFill(item, solidFill, stroke);
+  const waistY = 148;
+  const hemY = DRESS_LENGTH_HEMS[item.dressLength] ?? DRESS_LENGTH_HEMS.Knee;
+  const isLongSleeve = item.sleeveLength === "Long sleeve";
+  const isStrapless = item.style === "Cocktail dress" && !isLongSleeve;
+
+  if (isStrapless) {
+    const straps = `
+      <path d="M70 115 L68 83" stroke="${stroke}" stroke-width="3" stroke-linecap="round"/>
+      <path d="M106 115 L108 83" stroke="${stroke}" stroke-width="3" stroke-linecap="round"/>
+    `;
+    const body = buildFittedCocktailDressSvg(waistY+20, hemY+5, fill, stroke);
+    return `<svg viewBox="0 0 176 420" aria-hidden="true">${defs}${straps}${body}</svg>`;
+  }
+
+  const isSundress = item.style === "Sundress";
+  const bodice = isSundress
+    ? `<path d="M50 92 C54 78, 62 74, 76 78 L88 122 L100 78 C114 74, 122 78, 126 92 C130 112, 128 134, 120 ${waistY} C108 ${waistY + 4}, 68 ${waistY + 4}, 56 ${waistY} C48 134, 46 112, 50 92 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+    : `<path d="M50 90 C54 76, 66 68, 88 70 C110 68, 122 76, 126 90 C130 110, 128 132, 120 ${waistY} C108 ${waistY + 4}, 68 ${waistY + 4}, 56 ${waistY} C48 132, 46 110, 50 90 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+
+  const neckline = isSundress
+    ? ""
+    : `<path d="M74 74 Q88 94 102 74" fill="none" stroke="${stroke}" stroke-width="2"/>`;
+
+  let sleeves;
+  if (isSundress && !isLongSleeve) {
+    sleeves = `
+      <path d="M76 76 C60 78, 38 90, 28 120 L57 120 L57 92 C57 84, 62 80, 76 76 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M100 76 C116 78, 138 90, 148 120 L119 120 L119 92 C119 84, 114 80, 100 76 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    `;
+  } else if (item.style === "Maxi dress" && isLongSleeve) {
+    sleeves = `
+      <path d="M56 82 C44 78, 26 84, 20 98 C12 122, 12 158, 20 188 C12 195, 10 200, 20 206 C30 210, 44 208, 70 220 C62 182, 56 155, 56 128 C56 106, 62 90, 56 82 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M20 203 Q36 209 52 203" fill="none" stroke="${stroke}" stroke-width="2"/>
+      <path d="M120 82 C132 78, 150 84, 156 98 C164 122, 164 158, 156 188 C164 195, 166 200, 156 206 C146 210, 132 208, 106 220 C114 182, 120 155, 120 128 C120 106, 114 90, 120 82 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M156 203 Q140 209 124 203" fill="none" stroke="${stroke}" stroke-width="2"/>
+    `;
+  } else if (isLongSleeve) {
+    sleeves = `
+      <path d="M58 82 C50 78, 40 82, 36 92 C30 120, 30 165, 34 210 C38 220, 46 222, 50 216 C54 180, 56 130, 58 82 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M118 82 C126 78, 136 82, 140 92 C146 120, 146 165, 142 210 C138 220, 130 222, 126 216 C122 180, 120 130, 118 82 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    `;
+  } else {
+    sleeves = `
+      <path d="M60 78 C52 74, 42 76, 38 86 C34 96, 38 108, 48 112 C54 114, 60 110, 61 102 C62 92, 62 84, 60 78 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+      <path d="M116 78 C124 74, 134 76, 138 86 C142 96, 138 108, 128 112 C122 114, 116 110, 115 102 C114 92, 114 84, 116 78 Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    `;
+  }
+
+  const skirt = item.style === "Cocktail dress"
+    ? buildFittedSkirtSvg(waistY, hemY, fill, stroke)
+    : STRAIGHT_DRESS_STYLES.has(item.style)
+      ? `<path d="M56 ${waistY} L120 ${waistY} L126 ${hemY} L50 ${hemY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`
+      : buildAlineDressSkirtSvg(waistY, hemY, fill, stroke);
+
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${defs}${sleeves}${bodice}${neckline}${skirt}</svg>`;
+}
+
+function buildFittedCocktailDressSvg(waistY, hemY, fill, stroke) {
+  const { hipY, ctrl1Y, ctrl2Y, taperY } = fittedSkirtTaperPoints(hemY);
+  const necklineY = 110;
+
+  return `<path d="M56 ${necklineY} Q88 ${necklineY + 10} 120 ${necklineY} L118 ${waistY} C126 ${waistY + 8}, 128 ${waistY + 20}, 124 ${hipY} C122 ${ctrl1Y}, 120 ${ctrl2Y}, 118 ${taperY} L120 ${hemY} L56 ${hemY} L58 ${taperY} C56 ${ctrl2Y}, 54 ${ctrl1Y}, 52 ${hipY} C48 ${waistY + 20}, 46 ${waistY + 8}, 58 ${waistY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+}
+
+function buildFittedSkirtSvg(waistY, hemY, fill, stroke) {
+  const { hipY, ctrl1Y, ctrl2Y, taperY } = fittedSkirtTaperPoints(hemY);
+  return `<path d="M58 ${waistY} L118 ${waistY} C126 ${waistY + 8}, 128 ${waistY + 20}, 124 ${hipY} C122 ${ctrl1Y}, 120 ${ctrl2Y}, 118 ${taperY} L120 ${hemY} L56 ${hemY} L58 ${taperY} C56 ${ctrl2Y}, 54 ${ctrl1Y}, 52 ${hipY} C48 ${waistY + 20}, 46 ${waistY + 8}, 58 ${waistY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+}
+
+function fittedSkirtTaperPoints(hemY) {
+  const hipY = 180;
+  const taperY = Math.max(hipY + 10, hemY - 32);
+  const ctrl1Y = hipY + (taperY - hipY) * 0.32;
+  const ctrl2Y = hipY + (taperY - hipY) * 0.77;
+  return { hipY, taperY, ctrl1Y, ctrl2Y };
+}
+
+function buildAlineDressSkirtSvg(waistY, hemY, fill, stroke) {
+  const flareStart = waistY + (hemY - waistY) * 0.3;
+  const flareEnd = waistY + (hemY - waistY) * 0.75;
+  return `<path d="M56 ${waistY} L120 ${waistY} C134 ${flareStart} 142 ${flareEnd} 144 ${hemY} L32 ${hemY} C34 ${flareEnd} 42 ${flareStart} 56 ${waistY} Z" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
 }
 
 function resolveTopSilhouette(item) {
@@ -190,8 +287,9 @@ function resolveTopSilhouette(item) {
 function renderBottomSvg(item, controls, effectiveTemperature, presentation = "Unspecified") {
   if (!item) return "";
 
-  const fill = colorForItem(item.color, "#b8d8c2");
-  const stroke = accentColor(fill);
+  const solidFill = colorForItem(item.color, "#b8d8c2");
+  const stroke = accentColor(solidFill);
+  const { fill, defs } = buildPatternFill(item, solidFill, stroke);
   const ignoresTuck = item.type === "Pants" && ["Overalls", "Jumpsuit"].includes(item.style);
   const tucked = ignoresTuck ? false : controls.tuckedIn;
   const waistY = item.type === "Pants"
@@ -203,21 +301,22 @@ function renderBottomSvg(item, controls, effectiveTemperature, presentation = "U
     : (tucked ? 190 : 210);
 
   if (item.type === "Skirts") {
-    return `<svg viewBox="0 0 176 420" aria-hidden="true">${buildSkirtSvg(item, fill, stroke, waistY, presentation)}</svg>`;
+    return `<svg viewBox="0 0 176 420" aria-hidden="true">${defs}${buildSkirtSvg(item, fill, stroke, waistY, presentation)}</svg>`;
   }
 
   if (item.type === "Shorts") {
-    return `<svg viewBox="0 0 176 420" aria-hidden="true">${buildShortsSvg(item, fill, stroke, waistY)}</svg>`;
+    return `<svg viewBox="0 0 176 420" aria-hidden="true">${defs}${buildShortsSvg(item, fill, stroke, waistY)}</svg>`;
   }
 
-  return `<svg viewBox="0 0 176 420" aria-hidden="true">${buildPantsSvg(item, fill, stroke, waistY, effectiveTemperature, presentation)}</svg>`;
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${defs}${buildPantsSvg(item, fill, stroke, waistY, effectiveTemperature, presentation)}</svg>`;
 }
 
 function renderLayerSvg(item, controls) {
   if (!item || item.type !== "Jackets") return "";
 
-  const fill = colorForItem(item.color, "#3b3f44");
-  const stroke = accentColor(fill);
+  const solidFill = colorForItem(item.color, "#3b3f44");
+  const stroke = accentColor(solidFill);
+  const { fill, defs } = buildPatternFill(item, solidFill, stroke);
   const closed = controls.jacketClosed;
   const longJacketStyles = new Set(["Parka", "Peacoat", "Overcoat", "Trench coat"]);
   const sleevelessStyles = new Set(["Vest"]);
@@ -303,7 +402,7 @@ function renderLayerSvg(item, controls) {
   const zipperTopY = isVest ? 122 : isLeatherJacket ? 82 : isPufferStyle ? 84 : isPeacoat ? 88 : 94;
   const zipper = closed ? buildClosedJacketZipper(stroke, hemY, zipperTopY) : "";
 
-  return `<svg viewBox="0 0 176 420" aria-hidden="true">${sleevePath}${body}${vestDetails}${pufferLines}${puffLines}${belt}${zipper}</svg>`;
+  return `<svg viewBox="0 0 176 420" aria-hidden="true">${defs}${sleevePath}${body}${vestDetails}${pufferLines}${puffLines}${belt}${zipper}</svg>`;
 }
 
 function buildVestSvg(fill, stroke, hemY) {
@@ -523,7 +622,7 @@ function buildSkirtSvg(item, fill, stroke, waistY, presentation = "Unspecified")
     Mini: 72,
     Knee: 108,
     Midi: 144,
-    Floor: 196,
+    Floor: 236,
   };
   const skirtLength = lengthMap[item.skirtLength || "Knee"];
   const bottomY = waistY + skirtLength;
@@ -642,6 +741,43 @@ function buildPantsSvg(item, fill, stroke, waistY, effectiveTemperature, present
     ${pockets}
     ${overallsTop}
   `;
+}
+
+function detectClothingPatternType(patternText) {
+  const raw = (patternText || "").trim().toLowerCase();
+  if (!raw || raw === "solid" || raw === "none") return null;
+  if (raw.includes("chevron") || raw.includes("herringbone") || raw.includes("zigzag") || raw.includes("zig-zag")) {
+    return "chevron";
+  }
+  if (raw.includes("stripe")) return "stripes";
+  if (raw.includes("polka") || raw.includes("dot") || raw.includes("spot")) return "dots";
+  if (raw.includes("plaid") || raw.includes("check") || raw.includes("gingham") || raw.includes("tartan")) return "plaid";
+  if (raw.includes("floral") || raw.includes("flower") || raw.includes("paisley")) return "floral";
+  // Any other free-typed pattern (camo, argyle, houndstooth, animal print, etc.) still gets a
+  // visibly textured swatch instead of silently rendering as a solid color.
+  return "textured";
+}
+
+function buildPatternFill(item, solidFill, stroke) {
+  const patternType = detectClothingPatternType(item?.pattern);
+  if (!patternType) return { fill: solidFill, defs: "" };
+
+  const patternId = `pattern-${item.id || "preview"}`;
+  const patternBody = {
+    stripes: `<rect width="16" height="16" fill="${solidFill}"/><rect width="8" height="16" fill="${stroke}"/>`,
+    dots: `<rect width="18" height="18" fill="${solidFill}"/><circle cx="9" cy="9" r="3" fill="${stroke}"/>`,
+    plaid: `<rect width="20" height="20" fill="${solidFill}"/><rect width="20" height="5" fill="${stroke}" opacity="0.55"/><rect width="5" height="20" fill="${stroke}" opacity="0.55"/>`,
+    floral: `<rect width="24" height="24" fill="${solidFill}"/><circle cx="12" cy="7.5" r="3.6" fill="${stroke}"/><circle cx="16.3" cy="10.6" r="3.6" fill="${stroke}"/><circle cx="14.6" cy="15.6" r="3.6" fill="${stroke}"/><circle cx="9.4" cy="15.6" r="3.6" fill="${stroke}"/><circle cx="7.7" cy="10.6" r="3.6" fill="${stroke}"/><circle cx="12" cy="12" r="2.1" fill="${solidFill}"/>`,
+    chevron: `<rect width="20" height="20" fill="${solidFill}"/><path d="M-5 5 L5 15 L15 5 L25 15" stroke="${stroke}" stroke-width="4" fill="none"/><path d="M-5 15 L5 25 L15 15 L25 25" stroke="${stroke}" stroke-width="4" fill="none" opacity="0.6"/>`,
+    textured: `<rect width="14" height="14" fill="${solidFill}"/><path d="M0 14 L14 0" stroke="${stroke}" stroke-width="2" opacity="0.5"/><path d="M0 0 L14 14" stroke="${stroke}" stroke-width="2" opacity="0.3"/>`,
+  }[patternType];
+  const patternSize = { stripes: 16, dots: 18, plaid: 20, floral: 24, chevron: 20, textured: 14 }[patternType];
+  const patternTransform = patternType === "stripes" ? ` patternTransform="rotate(45)"` : "";
+
+  return {
+    fill: `url(#${patternId})`,
+    defs: `<defs><pattern id="${patternId}" width="${patternSize}" height="${patternSize}" patternUnits="userSpaceOnUse"${patternTransform}>${patternBody}</pattern></defs>`,
+  };
 }
 
 function accentColor(hexColor) {

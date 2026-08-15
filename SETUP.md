@@ -1,17 +1,19 @@
-# Setting up feedback and AI photo auto-fill
+# Setting up accounts, weather, feedback, and AI photo auto-fill
 
-QuickFit is a static site (GitHub Pages), so the feedback form and the "add a
-closet item from a photo" feature both need a small piece of outside
-infrastructure to actually work. Until you do this setup, both features
-degrade gracefully: the feedback form tells visitors delivery isn't
-configured yet, and photo upload still attaches a thumbnail but skips
-auto-filling the fields.
+QuickFit is a static site (GitHub Pages) paired with a Cloudflare Worker
+(`worker/`) that now handles everything that needs a real secret or a
+database: user accounts, weather, and AI photo analysis. The feedback form
+uses a separate Formspree endpoint. Until you do this setup, the app can't
+log anyone in (accounts and weather both depend on the worker being
+deployed), and the feedback form tells visitors delivery isn't configured
+yet.
 
-Everything below is configured once, as GitHub Actions secrets. Nothing
-sensitive is ever committed to the repo — the deploy workflow
-(`.github/workflows/deploy.yml`) writes these into
-`src/scripts/runtime-config.js` at deploy time, the same way it already does
-for `OPENWEATHER_API_KEY`.
+Frontend secrets are configured once, as GitHub Actions secrets — the deploy
+workflow (`.github/workflows/deploy.yml`) writes them into
+`src/scripts/runtime-config.js` at deploy time. Worker secrets
+(`GEMINI_API_KEY`, `OPENWEATHER_API_KEY`) are configured directly on
+Cloudflare via `wrangler secret put` and are never written into any file in
+this repo.
 
 ## 1. Feedback delivery (Formspree) — done
 
@@ -28,13 +30,15 @@ To wire it in:
 That's it — no code changes needed. The feedback form already submits via
 `fetch` in the pattern Formspree recommends for plain JS sites.
 
-## 2. Photo analysis (Google Gemini + Cloudflare Worker)
+## 2. The Cloudflare Worker (accounts, weather, AI photo analysis)
 
-Since Anthropic's signup was blocked for you, photo auto-fill uses Google
-Gemini instead (`worker/src/index.js` already calls Gemini's API). The flow
-is the same either way: the browser sends a photo to your Cloudflare
-Worker, the worker calls the AI provider with a key that never touches the
-browser, and returns suggested fields.
+`worker/` is one Cloudflare Worker that now backs three features: user
+accounts + closet storage (Cloudflare D1), the weather proxy (so your
+OpenWeather key never reaches the browser), and AI photo auto-fill (Google
+Gemini). Since Anthropic's signup was blocked for you, photo auto-fill uses
+Gemini instead of Claude — the flow is the same either way: the browser
+calls your Worker, the Worker calls the AI provider with a key that never
+touches the browser, and returns suggested fields.
 
 ### 2a. Get a Gemini API key
 
@@ -60,7 +64,7 @@ npx wrangler login
 Cloudflare account (a free account is enough — create one at
 dash.cloudflare.com if you don't have one).
 
-### 2c. Set the worker's origin check and secret
+### 2c. Set the worker's origin check and secrets
 
 `worker/wrangler.toml` is already set to:
 
@@ -72,16 +76,41 @@ That's your GitHub Pages origin based on this repo (`BridgetKimball/QuickFit`).
 Double check it matches exactly what's shown at **repo Settings → Pages →
 "Your site is live at ..."** — if you're using a custom domain instead, use
 that domain here. This value is what stops other websites from using your
-worker and spending your Gemini quota, so it's worth getting right.
+worker (accounts, weather, and Gemini quota all ride on it), so it's worth
+getting right.
 
-Then set the actual key as a secret (this prompts you to paste it — it's
-never typed on the command line or committed anywhere):
+Then set the two real secrets (each prompts you to paste the value — never
+typed on the command line or committed anywhere):
 
 ```bash
 npx wrangler secret put GEMINI_API_KEY
+npx wrangler secret put OPENWEATHER_API_KEY
 ```
 
-### 2d. Deploy
+If you previously had an `OPENWEATHER_API_KEY` **GitHub Actions secret** (used
+to embed the key directly in client JS), delete it now — the key only lives
+as a Worker secret going forward and is never shipped to the browser.
+
+### 2d. Create the D1 database (user accounts + closet storage)
+
+```bash
+npx wrangler d1 create quickfit-db
+```
+
+This prints a `database_id` — paste it into the `[[d1_databases]]` block in
+`worker/wrangler.toml` (replacing `REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE`).
+Then apply the schema once, locally, to confirm it works:
+
+```bash
+npx wrangler d1 migrations apply quickfit-db --local
+npx wrangler d1 migrations apply quickfit-db --remote
+```
+
+(CI applies `--remote` migrations automatically on every push after this —
+see step 2f — but running it once yourself here confirms the database and
+`database_id` are wired up correctly before you rely on CI.)
+
+### 2e. Deploy the worker manually, once
 
 ```bash
 npx wrangler deploy
@@ -93,20 +122,37 @@ Wrangler will print a URL that looks like:
 https://quickfit-photo-analysis.<your-cloudflare-subdomain>.workers.dev
 ```
 
-That's your `PHOTO_ANALYSIS_ENDPOINT`.
+That's your `PHOTO_ANALYSIS_ENDPOINT` — it's now also the base URL the
+frontend uses for weather, login/signup, and closet/profile/favorites
+requests (`${PHOTO_ANALYSIS_ENDPOINT}/weather`,
+`${PHOTO_ANALYSIS_ENDPOINT}/auth/login`, etc.), so this one secret covers
+every backend feature.
 
-### 2e. Add the worker URL as a GitHub secret
+### 2f. Add GitHub secrets for the worker URL and automated deploys
 
 1. Repo → **Settings → Secrets and variables → Actions → New repository
    secret**.
-2. Name: `PHOTO_ANALYSIS_ENDPOINT`
-3. Value: the `workers.dev` URL from step 2d.
-4. Push to `main`, or re-run the "Deploy QuickFit" workflow from the
+2. Name: `PHOTO_ANALYSIS_ENDPOINT` → Value: the `workers.dev` URL from step 2e.
+3. Create a Cloudflare API token at
+   [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
+   → **Create Token** → give it `Workers Scripts: Edit` and `D1: Edit`
+   permissions for your account.
+4. Add it as another secret: Name: `CLOUDFLARE_API_TOKEN` → Value: the token
+   from step 3.
+5. Push to `main`, or re-run the "Deploy QuickFit" workflow from the
    **Actions** tab.
 
-Once that deploy finishes, uploading a photo in the Closet Manager will call
-the worker and pre-fill the form fields (color, type, style, and so on) for
-you to review before saving.
+From this point on, every push to `main` automatically applies any new D1
+migrations and redeploys the worker (`deploy-worker` job in
+`.github/workflows/deploy.yml`), alongside the existing Pages deploy — you
+only need to `wrangler deploy`/`wrangler d1 migrations apply` by hand again
+if you're testing something locally first.
+
+Once the first deploy finishes, the app will show a login/sign-up gate,
+uploading a photo in the Closet Manager will call the worker and pre-fill
+the form fields for you to review before saving, and the planner's weather
+will load automatically through the worker instead of needing a client-side
+OpenWeather key.
 
 ## Cost and abuse notes
 
@@ -122,9 +168,11 @@ you to review before saving.
 
 ## If you want to switch AI providers later
 
-The worker is small and isolated in `worker/src/index.js` — swapping in
-OpenAI or another vision model later just means changing the `fetch` call
-inside `analyzeClothingPhoto()` and the secret name in `wrangler.toml`. The
-rest of QuickFit (the client-side upload UI, the form pre-fill logic) reads
-whatever JSON the worker returns and doesn't care which provider produced
-it.
+Photo analysis lives in its own route module, `worker/src/routes/photo.js`
+(the worker also has `routes/weather.js`, `routes/auth.js`, `routes/closet.js`,
+`routes/profile.js`, and `routes/favorites.js` for the other features) —
+swapping in OpenAI or another vision model later just means changing the
+`fetch` call inside `analyzeClothingPhoto()` in that one file and the secret
+name in `wrangler.toml`. The rest of QuickFit (the client-side upload UI, the
+form pre-fill logic) reads whatever JSON the worker returns and doesn't care
+which provider produced it.
