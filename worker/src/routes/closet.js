@@ -8,6 +8,16 @@ closet.use("*", requireAuth);
 
 const REQUIRED_FIELDS = ["name", "color", "type", "style"];
 
+// D1 rejects any single TEXT value above roughly 2MB (SQLITE_TOOBIG). Photos are
+// resized client-side before upload, but this is a defense-in-depth guard so an
+// oversized photo (or a direct API call) fails with a clear message instead of a
+// raw 500 from the database.
+const MAX_PHOTO_LENGTH = 1_500_000;
+
+function isPhotoTooLarge(item) {
+  return typeof item?.photo === "string" && item.photo.length > MAX_PHOTO_LENGTH;
+}
+
 const INSERT_SQL = `INSERT INTO closet_items
   (id, user_id, name, color, base_color, pattern, material, type, style, skirt_length, dress_length, sleeve_length, jewelry_type, theme, is_favorite, photo)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
@@ -44,6 +54,9 @@ closet.post("/", async (c) => {
   const body = await c.req.json().catch(() => null);
   if (!body || REQUIRED_FIELDS.some((field) => !body[field])) {
     return c.json({ error: "Missing required closet item fields." }, 400);
+  }
+  if (isPhotoTooLarge(body)) {
+    return c.json({ error: "That photo is too large to save. Try a smaller image." }, 413);
   }
 
   const id = generateId();
@@ -87,10 +100,13 @@ closet.post("/import", async (c) => {
 
   const statements = items.map((item) => {
     const id = typeof item.id === "string" && item.id ? item.id : generateId();
+    // Drop just the photo (not the whole item) if it's too large for D1 to store —
+    // legacy localStorage data predates the client-side resize, so this can happen.
+    const safeItem = isPhotoTooLarge(item) ? { ...item, photo: null } : item;
     return bindItemValues(
       c.env.DB.prepare(INSERT_SQL.replace("INSERT INTO", "INSERT OR IGNORE INTO")),
       userId,
-      item,
+      safeItem,
       id
     );
   });

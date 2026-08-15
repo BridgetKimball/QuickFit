@@ -272,6 +272,7 @@ const elements = {
   photoUploadStatus: document.querySelector("#photo-upload-status"),
   photoUploadPreview: document.querySelector("#photo-upload-preview"),
   photoUploadThumb: document.querySelector("#photo-upload-thumb"),
+  photoUploadRemove: document.querySelector("#photo-upload-remove"),
   photoUploadProgress: document.querySelector("#photo-upload-progress"),
   photoUploadProgressBar: document.querySelector("#photo-upload-progress-bar"),
   photoModeSingleButton: document.querySelector("#photo-mode-single"),
@@ -798,6 +799,11 @@ function bindEvents() {
   elements.photoUploadInput?.addEventListener("change", (event) => {
     const [file] = event.target.files || [];
     if (file) handlePhotoUpload(file);
+  });
+
+  elements.photoUploadRemove?.addEventListener("click", () => {
+    clearPendingPhotoUpload();
+    elements.photoUploadStatus.textContent = "Photo removed. Fill in the fields below manually, or choose another photo.";
   });
 
   elements.photoModeSingleButton?.addEventListener("click", () => setPhotoUploadMode("single"));
@@ -1347,6 +1353,7 @@ async function handlePhotoUpload(file) {
   let dataUrl;
   try {
     dataUrl = await readFileAsDataUrl(file);
+    dataUrl = await resizeImageDataUrl(dataUrl);
   } catch (_error) {
     elements.photoUploadStatus.textContent = "Couldn't read that photo. Please try a different file.";
     return;
@@ -1499,6 +1506,35 @@ function readFileAsDataUrl(file) {
     reader.onload = () => resolve(reader.result);
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
+  });
+}
+
+// Real phone photos can be several MB, which D1 rejects outright (its per-value size
+// limit sits well under that). Downscale before it's ever uploaded or stored, since a
+// full-resolution photo is also pure waste for a small closet thumbnail.
+function resizeImageDataUrl(dataUrl, maxDimension = 900, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      let { width, height } = image;
+      if (width > maxDimension || height > maxDimension) {
+        if (width >= height) {
+          height = Math.round((height / width) * maxDimension);
+          width = maxDimension;
+        } else {
+          width = Math.round((width / height) * maxDimension);
+          height = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    image.onerror = () => reject(new Error("Couldn't decode that image."));
+    image.src = dataUrl;
   });
 }
 

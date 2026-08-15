@@ -584,7 +584,10 @@ textarea:focus {
 }
 
 .photo-upload__preview {
-  width: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .photo-upload__preview img {
