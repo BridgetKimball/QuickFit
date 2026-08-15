@@ -236,11 +236,28 @@ const elements = {
   profileStyleSelect: document.querySelector("#profileStyle"),
   shoesRecommendation: document.querySelector("#shoes-recommendation"),
   resetProfileButton: document.querySelector("#reset-profile"),
+  clearAllDataButton: document.querySelector("#clear-all-data"),
   savedOutfitsList: document.querySelector("#saved-outfits-list"),
   appAlert: document.querySelector("#app-alert"),
+  appAlertEyebrow: document.querySelector("#app-alert-eyebrow"),
+  appAlertTitle: document.querySelector("#app-alert-title"),
   appAlertMessage: document.querySelector("#app-alert-message"),
   appAlertClose: document.querySelector("#app-alert-close"),
+  appAlertCancel: document.querySelector("#app-alert-cancel"),
+  feedbackForm: document.querySelector("#feedback-form"),
+  feedbackCategory: document.querySelector("#feedback-category"),
+  feedbackMessage: document.querySelector("#feedback-message"),
+  feedbackEmail: document.querySelector("#feedback-email"),
+  feedbackSubmit: document.querySelector("#feedback-submit"),
+  feedbackStatus: document.querySelector("#feedback-status"),
+  photoUploadInput: document.querySelector("#photo-upload-input"),
+  photoUploadStatus: document.querySelector("#photo-upload-status"),
+  photoUploadPreview: document.querySelector("#photo-upload-preview"),
+  photoUploadThumb: document.querySelector("#photo-upload-thumb"),
 };
+
+let pendingModalConfirm = null;
+let pendingClosetPhoto = null;
 
 init();
 
@@ -313,7 +330,12 @@ function bindEvents() {
     await loadWeatherDefaultsForSelection(true);
   });
 
-  elements.appAlertClose?.addEventListener("click", closeAppAlert);
+  elements.appAlertClose?.addEventListener("click", () => {
+    const confirmCallback = pendingModalConfirm;
+    closeAppAlert();
+    confirmCallback?.();
+  });
+  elements.appAlertCancel?.addEventListener("click", closeAppAlert);
   elements.appAlert?.querySelector("[data-close-alert]")?.addEventListener("click", closeAppAlert);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -355,12 +377,14 @@ function bindEvents() {
     state.closet.unshift({
       id: crypto.randomUUID(),
       ...item,
+      photo: pendingClosetPhoto,
     });
 
     persistCollection(STORAGE_KEYS.closet, state.closet);
     event.currentTarget.reset();
     elements.typeSelect.selectedIndex = 0;
     elements.colorSelect.selectedIndex = 0;
+    clearPendingPhotoUpload();
     updateStyleOptions(elements.typeSelect.value);
     syncConditionalFields();
     populateClosetFilter();
@@ -383,41 +407,96 @@ function bindEvents() {
     generateRecommendation(getPlannerState());
   });
 
-  elements.resetProfileButton.addEventListener("click", async () => {
-    state.profile = { ...defaultProfile };
-    state.closet = [];
-    state.favoriteOutfits = [];
-    state.currentRecommendation = null;
-    state.mannequinControls = {
-      tuckedIn: false,
-      jacketClosed: false,
-    };
-    state.weatherLocation = null;
+  elements.resetProfileButton.addEventListener("click", () => {
+    showAppModal({
+      eyebrow: "Profile",
+      title: "Reset your profile?",
+      message: "This clears your temperature preference, style direction, and presentation preference back to their defaults. Your closet and saved outfits are not affected.",
+      confirmLabel: "Reset Profile",
+      cancelLabel: "Cancel",
+      onConfirm: () => {
+        resetProfileOnly();
+        showAppModal({
+          eyebrow: "Profile",
+          title: "Profile reset",
+          message: "Your profile preferences are back to their defaults.",
+          confirmLabel: "OK",
+        });
+      },
+    });
+  });
 
-    persistObject(STORAGE_KEYS.profile, state.profile);
-    persistCollection(STORAGE_KEYS.closet, state.closet);
-    persistCollection(STORAGE_KEYS.favoriteOutfits, state.favoriteOutfits);
-    localStorage.removeItem(STORAGE_KEYS.lastLocation);
-
-    elements.profileForm.reset();
-    elements.closetForm.reset();
-    elements.typeSelect.selectedIndex = 0;
-    elements.colorSelect.selectedIndex = 0;
-    elements.stylePreferenceSelect.value = defaultProfile.profileStyle;
-    setClosetFavoriteFilter("all");
-    populateOutfitDate();
-    updateStyleOptions(elements.typeSelect.value);
-    syncConditionalFields();
-    populateClosetFilter();
-    renderProfile();
-    renderCloset();
-    generateRecommendation(getPlannerState());
-    await loadWeatherDefaultsForSelection(false);
+  elements.clearAllDataButton?.addEventListener("click", () => {
+    showAppModal({
+      eyebrow: "Danger zone",
+      title: "Clear all data?",
+      message: "This permanently deletes every closet item and saved outfit on this device. This can't be undone.",
+      confirmLabel: "Clear All Data",
+      cancelLabel: "Cancel",
+      onConfirm: async () => {
+        await clearAllDataOnly();
+        showAppModal({
+          eyebrow: "Danger zone",
+          title: "All data cleared",
+          message: "Your closet and saved outfits have been removed from this device.",
+          confirmLabel: "OK",
+        });
+      },
+    });
   });
 
   elements.favoriteOutfitButton.addEventListener("click", () => {
     toggleFavoriteCurrentOutfit();
   });
+
+  elements.feedbackForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitFeedback(new FormData(event.currentTarget));
+  });
+
+  elements.photoUploadInput?.addEventListener("change", (event) => {
+    const [file] = event.target.files || [];
+    if (file) handlePhotoUpload(file);
+  });
+}
+
+function resetProfileOnly() {
+  state.profile = { ...defaultProfile };
+  persistObject(STORAGE_KEYS.profile, state.profile);
+
+  elements.profileForm.reset();
+  elements.stylePreferenceSelect.value = defaultProfile.profileStyle;
+  renderProfile();
+  generateRecommendation(getPlannerState());
+}
+
+async function clearAllDataOnly() {
+  state.closet = [];
+  state.favoriteOutfits = [];
+  state.currentRecommendation = null;
+  state.mannequinControls = {
+    tuckedIn: false,
+    jacketClosed: false,
+  };
+  state.weatherLocation = null;
+
+  persistCollection(STORAGE_KEYS.closet, state.closet);
+  persistCollection(STORAGE_KEYS.favoriteOutfits, state.favoriteOutfits);
+  localStorage.removeItem(STORAGE_KEYS.lastLocation);
+
+  elements.closetForm.reset();
+  elements.typeSelect.selectedIndex = 0;
+  elements.colorSelect.selectedIndex = 0;
+  clearPendingPhotoUpload();
+  setClosetFavoriteFilter("all");
+  populateOutfitDate();
+  updateStyleOptions(elements.typeSelect.value);
+  syncConditionalFields();
+  populateClosetFilter();
+  renderCloset();
+  renderSavedOutfits();
+  generateRecommendation(getPlannerState());
+  await loadWeatherDefaultsForSelection(false);
 }
 
 function setActiveSection(sectionId) {
@@ -426,7 +505,9 @@ function setActiveSection(sectionId) {
   });
 
   elements.navButtons.forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.section === sectionId);
+    const isActive = button.dataset.section === sectionId;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-current", isActive ? "page" : "false");
   });
 
   document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -661,6 +742,145 @@ function buildAutoItemName({ color, style, jewelryType }) {
     .join(" ");
 }
 
+async function handlePhotoUpload(file) {
+  let dataUrl;
+  try {
+    dataUrl = await readFileAsDataUrl(file);
+  } catch (_error) {
+    elements.photoUploadStatus.textContent = "Couldn't read that photo. Please try a different file.";
+    return;
+  }
+
+  pendingClosetPhoto = dataUrl;
+  elements.photoUploadThumb.src = dataUrl;
+  elements.photoUploadPreview?.classList.remove("is-hidden");
+
+  const endpoint = typeof window.QUICKFIT_PHOTO_ANALYSIS_ENDPOINT === "string"
+    ? window.QUICKFIT_PHOTO_ANALYSIS_ENDPOINT.trim()
+    : "";
+
+  if (!endpoint) {
+    elements.photoUploadStatus.textContent = "Photo attached. Auto-fill isn't configured yet, so fill in the fields below manually.";
+    return;
+  }
+
+  elements.photoUploadStatus.textContent = "Analyzing photo...";
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: dataUrl }),
+    });
+
+    if (!response.ok) throw new Error(`Photo analysis endpoint responded with ${response.status}`);
+
+    const suggestion = await response.json();
+    applyPhotoSuggestion(suggestion);
+    elements.photoUploadStatus.textContent = "Suggested fields filled in below, review them and Save to Closet.";
+  } catch (_error) {
+    elements.photoUploadStatus.textContent = "Couldn't auto-analyze this photo. Fill in the fields below manually.";
+  }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function applyPhotoSuggestion(suggestion) {
+  if (!suggestion || typeof suggestion !== "object") return;
+
+  if (suggestion.type && clothingStyles[suggestion.type]) {
+    elements.typeSelect.value = suggestion.type;
+    updateStyleOptions(suggestion.type);
+  }
+
+  if (suggestion.style && clothingStyles[elements.typeSelect.value]?.includes(suggestion.style)) {
+    elements.styleSelect.value = suggestion.style;
+  }
+
+  if (suggestion.color && colorOptions.includes(suggestion.color)) {
+    elements.colorSelect.value = suggestion.color;
+  } else if (suggestion.color) {
+    elements.colorSelect.value = "Multicolor";
+  }
+
+  syncConditionalFields();
+
+  if (suggestion.color && !colorOptions.includes(suggestion.color)) {
+    elements.customColorInput.value = suggestion.color;
+  }
+
+  if (suggestion.pattern) elements.closetForm.pattern.value = suggestion.pattern;
+  if (suggestion.material) elements.closetForm.material.value = suggestion.material;
+  if (suggestion.theme && elements.typeSelect.value !== "Accessories") {
+    elements.closetThemeSelect.value = suggestion.theme;
+  }
+  if (suggestion.skirtLength) elements.skirtLengthSelect.value = suggestion.skirtLength;
+  if (suggestion.sleeveLength) elements.sleeveLengthSelect.value = suggestion.sleeveLength;
+  if (suggestion.jewelryType) elements.jewelryTypeSelect.value = suggestion.jewelryType;
+}
+
+function clearPendingPhotoUpload() {
+  pendingClosetPhoto = null;
+  if (elements.photoUploadInput) elements.photoUploadInput.value = "";
+  if (elements.photoUploadStatus) elements.photoUploadStatus.textContent = "";
+  elements.photoUploadPreview?.classList.add("is-hidden");
+  if (elements.photoUploadThumb) elements.photoUploadThumb.src = "";
+}
+
+async function describeFormspreeError(response) {
+  try {
+    const body = await response.json();
+    if (Array.isArray(body?.errors) && body.errors.length) {
+      return body.errors.map((error) => error.message).filter(Boolean).join(" ");
+    }
+  } catch (_error) {
+    // Response wasn't JSON, fall through to the generic message below.
+  }
+
+  return "Something went wrong sending your feedback. Please try again in a moment.";
+}
+
+async function submitFeedback(formData) {
+  const message = String(formData.get("message") || "").trim();
+  if (!message) return;
+
+  const endpoint = typeof window.QUICKFIT_FORMSPREE_ENDPOINT === "string"
+    ? window.QUICKFIT_FORMSPREE_ENDPOINT.trim()
+    : "";
+
+  if (!endpoint) {
+    elements.feedbackStatus.textContent = "Feedback delivery isn't configured yet. Please try again later.";
+    return;
+  }
+
+  elements.feedbackSubmit.disabled = true;
+  elements.feedbackStatus.textContent = "Sending your feedback...";
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error(await describeFormspreeError(response));
+
+    elements.feedbackForm.reset();
+    elements.feedbackStatus.textContent = "Thanks for the feedback, it's on its way to us.";
+  } catch (error) {
+    elements.feedbackStatus.textContent = error.message || "Something went wrong sending your feedback. Please try again in a moment.";
+  } finally {
+    elements.feedbackSubmit.disabled = false;
+  }
+}
+
 function populateClosetFilter() {
   const currentValue = elements.closetFilter.value || "all";
   elements.closetFilter.innerHTML = '<option value="all">All items</option>';
@@ -703,7 +923,8 @@ function renderCloset() {
     card.className = "closet-card fade-in";
     card.innerHTML = `
       <div class="closet-card__header">
-        <div>
+        <div class="closet-card__identity">
+          ${item.photo ? `<img class="closet-card__photo" src="${item.photo}" alt="${displayName}">` : ""}
           <div class="closet-card__title">${displayName}</div>
         </div>
         <div class="closet-card__actions">
@@ -712,6 +933,7 @@ function renderCloset() {
             data-favorite-id="${item.id}"
             type="button"
             aria-pressed="${item.isFavorite ? "true" : "false"}"
+            aria-label="${item.isFavorite ? "Remove from favorites" : "Add to favorites"}"
           >
             ${item.isFavorite ? "♥" : "♡"}
           </button>
@@ -1306,17 +1528,41 @@ function describeNeededShoes(temperature) {
 }
 
 function showAppAlert(message) {
+  showAppModal({
+    eyebrow: "Fit check",
+    title: "No applicable pieces",
+    message,
+  });
+}
+
+function showAppModal({ eyebrow = "Fit check", title, message, confirmLabel = "OK", cancelLabel = null, onConfirm = null }) {
   if (!elements.appAlert || !elements.appAlertMessage) return;
 
+  if (elements.appAlertEyebrow) elements.appAlertEyebrow.textContent = eyebrow;
+  if (title && elements.appAlertTitle) elements.appAlertTitle.textContent = title;
   elements.appAlertMessage.innerHTML = typeof message === "string"
     ? message
     : `<span>${message.guidance}</span><span>${message.missing}</span>`;
+
+  if (elements.appAlertClose) elements.appAlertClose.textContent = confirmLabel;
+  pendingModalConfirm = onConfirm;
+
+  if (cancelLabel && elements.appAlertCancel) {
+    elements.appAlertCancel.textContent = cancelLabel;
+    elements.appAlertCancel.classList.remove("is-hidden");
+  } else {
+    elements.appAlertCancel?.classList.add("is-hidden");
+  }
+
   elements.appAlert.classList.remove("is-hidden");
-  elements.appAlertClose?.focus();
+  const shouldFocusCancel = Boolean(cancelLabel) && elements.appAlertCancel;
+  (shouldFocusCancel ? elements.appAlertCancel : elements.appAlertClose)?.focus();
 }
 
 function closeAppAlert() {
   elements.appAlert?.classList.add("is-hidden");
+  elements.appAlertCancel?.classList.add("is-hidden");
+  pendingModalConfirm = null;
 }
 
 function applyMannequinStyles(topItem, bottomItem, layerItem, shoesItem, effectiveTemperature, accessoryItems = []) {

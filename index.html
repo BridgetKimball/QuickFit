@@ -82,6 +82,9 @@
         <button class="section-nav__link" type="button" data-section="profile">
           Profile
         </button>
+        <button class="section-nav__link" type="button" data-section="feedback">
+          Feedback
+        </button>
       </nav>
 
       <main class="main-content">
@@ -244,6 +247,27 @@
               <h2>Add clothing items</h2>
             </div>
 
+            <div class="photo-upload">
+              <div class="photo-upload__header">
+                <p class="eyebrow">Faster entry</p>
+                <h3>Add from a photo</h3>
+                <p>
+                  Upload a picture of the item and QuickFit will suggest the fields below
+                  for you to review before saving.
+                </p>
+              </div>
+              <div class="photo-upload__row">
+                <label class="photo-upload__control">
+                  <input type="file" id="photo-upload-input" accept="image/*" hidden>
+                  <span class="button button--ghost button--small">Choose Photo</span>
+                </label>
+                <span class="photo-upload__status" id="photo-upload-status"></span>
+              </div>
+              <div class="photo-upload__preview is-hidden" id="photo-upload-preview">
+                <img id="photo-upload-thumb" alt="Uploaded clothing preview">
+              </div>
+            </div>
+
             <form id="closet-form" class="closet-form">
               <div class="form-row">
                 <div class="field-stack">
@@ -398,6 +422,20 @@
                 </button>
               </div>
             </form>
+
+            <div class="danger-zone">
+              <div class="danger-zone__header">
+                <p class="eyebrow">Danger zone</p>
+                <h3>Clear all data</h3>
+                <p>
+                  Permanently deletes every closet item and saved outfit on this device.
+                  Your profile preferences above are not affected.
+                </p>
+              </div>
+              <button class="button button--danger" id="clear-all-data" type="button">
+                Clear All Data
+              </button>
+            </div>
           </article>
 
           <article class="panel panel--profile-summary">
@@ -416,18 +454,69 @@
             </div>
           </article>
         </section>
+
+        <section class="panel-grid panel-grid--feedback" id="feedback">
+          <article class="panel">
+            <div class="panel__header">
+              <p class="eyebrow">We're listening</p>
+              <h2>Share feedback</h2>
+            </div>
+            <p class="feedback-intro">
+              Found something confusing, missing a feature, or have an idea for QuickFit?
+              Let us know below.
+            </p>
+
+            <form id="feedback-form" class="closet-form">
+              <label>
+                What's on your mind?
+                <select name="category" id="feedback-category">
+                  <option value="Idea">Feature idea</option>
+                  <option value="Bug">Something's broken</option>
+                  <option value="Praise">Just want to say something nice</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+
+              <label>
+                Your feedback
+                <textarea
+                  name="message"
+                  id="feedback-message"
+                  rows="6"
+                  placeholder="Tell us what's working, what isn't, or what you'd love to see next."
+                  required
+                ></textarea>
+              </label>
+
+              <label>
+                Email <span class="optional-tag">(optional, in case we want to follow up)</span>
+                <input type="email" name="email" id="feedback-email" placeholder="you@example.com">
+              </label>
+
+              <button class="button button--primary" type="submit" id="feedback-submit">
+                Send Feedback
+              </button>
+              <p class="feedback-status" id="feedback-status" role="status" aria-live="polite"></p>
+            </form>
+          </article>
+        </section>
       </main>
     </div>
 
     <div class="app-modal is-hidden" id="app-alert" role="dialog" aria-modal="true" aria-labelledby="app-alert-title">
       <div class="app-modal__backdrop" data-close-alert></div>
       <div class="app-modal__panel">
-        <p class="eyebrow">Fit check</p>
+        <p class="eyebrow" id="app-alert-eyebrow">Fit check</p>
         <h2 id="app-alert-title">No applicable pieces</h2>
         <p id="app-alert-message"></p>
-        <button class="button button--primary" id="app-alert-close" type="button">
-          OK
-        </button>
+        <div class="app-modal__actions">
+          <button class="button button--ghost is-hidden" id="app-alert-cancel" type="button">
+            Cancel
+          </button>
+          <button class="button button--primary" id="app-alert-close" type="button">
+            OK
+          </button>
+        </div>
       </div>
     </div>
 

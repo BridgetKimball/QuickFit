@@ -28,17 +28,31 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Write runtime weather config
+      - name: Write runtime config
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          FORMSPREE_ENDPOINT: ${{ secrets.FORMSPREE_ENDPOINT }}
+          PHOTO_ANALYSIS_ENDPOINT: ${{ secrets.PHOTO_ANALYSIS_ENDPOINT }}
         run: |
           if [ -z "$OPENWEATHER_API_KEY" ]; then
             echo "OPENWEATHER_API_KEY secret is required for weather support"
             exit 1
           fi
 
+          if [ -z "$FORMSPREE_ENDPOINT" ]; then
+            echo "FORMSPREE_ENDPOINT secret is not set, the feedback page will show a not-configured message"
+          fi
+
+          if [ -z "$PHOTO_ANALYSIS_ENDPOINT" ]; then
+            echo "PHOTO_ANALYSIS_ENDPOINT secret is not set, photo auto-fill will be skipped in the closet form"
+          fi
+
           mkdir -p src/scripts
-          printf 'window.QUICKFIT_OPENWEATHER_API_KEY = "%s";\n' "$OPENWEATHER_API_KEY" > src/scripts/runtime-config.js
+          {
+            printf 'window.QUICKFIT_OPENWEATHER_API_KEY = "%s";\n' "$OPENWEATHER_API_KEY"
+            printf 'window.QUICKFIT_FORMSPREE_ENDPOINT = "%s";\n' "$FORMSPREE_ENDPOINT"
+            printf 'window.QUICKFIT_PHOTO_ANALYSIS_ENDPOINT = "%s";\n' "$PHOTO_ANALYSIS_ENDPOINT"
+          } > src/scripts/runtime-config.js
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
